@@ -1,0 +1,6 @@
+[package]
+name = "rgb"
+version = "0.1.0"
+authors = ["Arnaud Taffanel <arnaud@bitcraze.se>"]
+
+[dependencies]

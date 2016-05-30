@@ -35,5 +35,5 @@ fn main() {
 
     println!("Starting execution at address 0x1000: ");
     cpu.set_pc(0); //x100);
-    cpu.execute_until(100);
+    cpu.execute_until(10000000);
 }

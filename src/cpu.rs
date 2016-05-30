@@ -2,6 +2,8 @@
 
 use cart;
 
+use std::fmt;
+
 const ZERO_FLAG: u8 = 1<<7;
 const SUBSTRACT_FLAG: u8 = 1<<6;
 const HALF_CARRY_FLAG: u8 = 1<<5;
@@ -21,14 +23,24 @@ struct Regs {
     sp: u16,
 }
 
+impl fmt::Debug for Regs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut debug = String::new();
+        debug.push_str(&format!("+-Registers--\n",));
+        debug.push_str(&format!("| A: {:02x} F: {:02x}\n", self.a, self.f));
+        debug.push_str(&format!("| B: {:02x} C: {:02x}\n", self.b, self.c));
+        debug.push_str(&format!("| D: {:02x} E: {:02x}\n", self.d, self.e));
+        debug.push_str(&format!("| H: {:02x} L: {:02x}\n", self.h, self.l));
+        debug.push_str(&format!("| SP: {:02x}\n", self.sp));
+        debug.push_str(&format!("| PC: {:02x}\n", self.pc));
+        write!(f, "{}", debug)
+    }
+}
+
 pub struct Cpu {
     regs: Regs,
     mem: cart::Cart,
     cycle: usize,
-}
-
-enum Op {
-    xor,
 }
 
 impl Cpu {
@@ -74,14 +86,21 @@ impl Cpu {
         }
     }
 
+    fn get_flag(&mut self, flag: u8) -> bool { (self.regs.f & flag) != 0 }
+
     fn decode(&mut self) -> usize {
         let instr = self.mem.read(self.regs.pc);
         match instr {
             0x00 => self.nop(),
+            0x20 => self.jr_nz_r8(),
             0x01 | 0x11 | 0x21 | 0x31 => self.ld16_val(instr),
             0x02 | 0x12 | 0x22 | 0x32 => self.store8_ind(instr),
             0xA8 ... 0xAD | 0xAF => self.xor_reg(instr),
-            _ => panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
+            0xCB => self.decode_cb(),
+            _ => {
+                println!("\n{:?}", self.regs);
+                panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
+            }
         }
     }
 
@@ -89,6 +108,19 @@ impl Cpu {
         println!("{:04x}: NOP", self.regs.pc);
         self.regs.pc += 1;
         4
+    }
+
+    fn jr_nz_r8(&mut self) -> usize {
+        let val = self.mem.read(self.regs.pc+1) as i8;
+        println!("{:04x}: JR NZ, {}", self.regs.pc, val);
+        if !self.get_flag(ZERO_FLAG) {
+            let newpc = (self.regs.pc as i32) + 2 + (val as i32);
+            self.regs.pc = newpc as u16;
+            12
+        } else {
+            self.regs.pc += 2;
+            8
+        }
     }
 
     fn ld16_val(&mut self, instr: u8) -> usize {
@@ -163,6 +195,48 @@ impl Cpu {
         }
 
         println!("{:04x}: XOR {}", self.regs.pc, reg_name);
+        self.regs.pc += 1;
+        4
+    }
+
+    fn decode_cb(&mut self) -> usize {
+        self.regs.pc += 1;
+        let instr = self.mem.read(self.regs.pc);
+
+        4 + match instr {
+            _ if (instr & 0xC0) == 0x40 => self.bit((instr >> 3) & 0x07, instr & 0x07),
+            _ => {
+                println!("\n{:?}", self.regs);
+                panic!("Uknown prefixed instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
+            }
+        }
+    }
+
+    fn bit(&mut self, bit: u8, reg_id: u8) -> usize {
+        self.set_flag(HALF_CARRY_FLAG, true);
+        self.set_flag(SUBSTRACT_FLAG, false);
+
+        let (flag, cycles, reg_name) = match reg_id {
+            // Register versions
+            0 => (self.regs.b & (1<<bit) == 0, 8, "B"),
+            1 => (self.regs.c & (1<<bit) == 0, 8, "C"),
+            2 => (self.regs.d & (1<<bit) == 0, 8, "D"),
+            3 => (self.regs.e & (1<<bit) == 0, 8, "E"),
+            4 => (self.regs.h & (1<<bit) == 0, 8, "H"),
+            5 => (self.regs.l & (1<<bit) == 0, 8, "L"),
+            7 => (self.regs.a & (1<<bit) == 0, 8, "A"),
+            // Indirect HL version
+            6 => {
+                let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
+                (self.mem.read(hl) & (1<<bit) == 0, 16, "B")
+            },
+
+            _ => panic!("Bug in decoding")
+        };
+
+        self.set_flag(ZERO_FLAG, flag);
+
+        println!("{:04x}: BIT {}, {}", self.regs.pc-1, bit, reg_name);
         self.regs.pc += 1;
         4
     }

@@ -32,6 +32,10 @@ impl Cart {
             _ => { println!("Warning: Reading outside the rom!"); 0 }
         }
     }
+
+    pub fn write(&mut self, address:u16, data:u8) {
+        ; // Ignoring write for a simple ROM, TODO: Remaping for more complex rom!
+    }
 }
 
 

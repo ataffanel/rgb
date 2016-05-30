@@ -34,6 +34,6 @@ fn main() {
     let mut cpu = cpu::Cpu::new(cart);
 
     println!("Starting execution at address 0x1000: ");
-    cpu.set_pc(0x100);
-    cpu.execute_until(10);
+    cpu.set_pc(0); //x100);
+    cpu.execute_until(100);
 }

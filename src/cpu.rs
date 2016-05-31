@@ -9,6 +9,23 @@ const SUBSTRACT_FLAG: u8 = 1<<6;
 const HALF_CARRY_FLAG: u8 = 1<<5;
 const CARRY_FLAG: u8 = 1<<4;
 
+// 8Bit register id as encoded in instructions
+const B_REGID: u8 = 0;
+const C_REGID: u8 = 1;
+const D_REGID: u8 = 2;
+const E_REGID: u8 = 3;
+const H_REGID: u8 = 4;
+const L_REGID: u8 = 5;
+const IND_HL_REGID: u8 = 6;
+const A_REGID: u8 = 7;
+
+// 16Bit register id as encoded in instructions
+const BC_REGID: u8 = 0;
+const DE_REGID: u8 = 1;
+const HL_REGID: u8 = 2;
+const SP_REGID: u8 = 3;
+
+
 struct Regs {
     a: u8,
     b: u8,
@@ -35,6 +52,10 @@ impl fmt::Debug for Regs {
         debug.push_str(&format!("| PC: {:02x}\n", self.pc));
         write!(f, "{}", debug)
     }
+}
+
+impl Regs {
+
 }
 
 pub struct Cpu {
@@ -88,6 +109,48 @@ impl Cpu {
 
     fn get_flag(&mut self, flag: u8) -> bool { (self.regs.f & flag) != 0 }
 
+    fn set_reg8_by_id(&mut self, id: u8, value: u8) {
+        match id {
+            B_REGID => self.regs.b = value,
+            C_REGID => self.regs.c = value,
+            D_REGID => self.regs.d = value,
+            E_REGID => self.regs.e = value,
+            H_REGID => self.regs.h = value,
+            L_REGID => self.regs.l = value,
+            IND_HL_REGID => self.mem.write((self.regs.h as u16)<<8 | self.regs.l as u16, value),
+            A_REGID => self.regs.a = value,
+            _ => panic!("Wrong reg id")
+        }
+    }
+
+    fn get_reg8_by_id(&self, id: u8) -> u8 {
+        match id {
+            B_REGID => self.regs.b,
+            C_REGID => self.regs.c,
+            D_REGID => self.regs.d,
+            E_REGID => self.regs.e,
+            H_REGID => self.regs.h,
+            L_REGID => self.regs.l,
+            IND_HL_REGID => self.mem.read((self.regs.h as u16)<<8 | self.regs.l as u16),
+            A_REGID => self.regs.a,
+            _ => panic!("Wrong reg id")
+        }
+    }
+
+    fn get_reg8_name(&self, id: u8) -> &str {
+        match id {
+            B_REGID => "B",
+            C_REGID => "C",
+            D_REGID => "D",
+            E_REGID => "E",
+            H_REGID => "H",
+            L_REGID => "L",
+            IND_HL_REGID => "(HL)",
+            A_REGID => "A",
+            _ => panic!("Wrong reg id")
+        }
+    }
+
     fn decode(&mut self) -> usize {
         let instr = self.mem.read(self.regs.pc);
         match instr {
@@ -96,7 +159,11 @@ impl Cpu {
             0x01 | 0x11 | 0x21 | 0x31 => self.ld16_val(instr),
             0x02 | 0x12 | 0x22 | 0x32 => self.store8_ind(instr),
             0xA8 ... 0xAD | 0xAF => self.xor_reg(instr),
+            0xC3 => self.jp_nn(),
             0xCB => self.decode_cb(),
+            0xFA => self.ld_a_ind_nn(),
+            _ if instr&0xC7 == 0x06 => self.ld_r_n((instr>>3)&0x7),
+            _ if instr&0xC0 == 0x40 => self.ld_r_r((instr>>3)&0x7, instr&0x7),
             _ => {
                 println!("\n{:?}", self.regs);
                 panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
@@ -108,6 +175,15 @@ impl Cpu {
         println!("{:04x}: NOP", self.regs.pc);
         self.regs.pc += 1;
         4
+    }
+
+    fn jp_nn(&mut self) -> usize{
+        let address = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
+        println!("{:04x}: JP ${:04x}", self.regs.pc, address);
+
+        self.regs.pc = address;
+
+        12
     }
 
     fn jr_nz_r8(&mut self) -> usize {
@@ -197,6 +273,36 @@ impl Cpu {
         println!("{:04x}: XOR {}", self.regs.pc, reg_name);
         self.regs.pc += 1;
         4
+    }
+
+    fn ld_r_r(&mut self, dest_reg:u8, src_reg:u8) -> usize {
+        println!("{:04x}: LD {}, {}", self.regs.pc, self.get_reg8_name(dest_reg), self.get_reg8_name(src_reg));
+        self.regs.pc += 1;
+
+        let value = self.get_reg8_by_id(src_reg);
+        self.set_reg8_by_id(dest_reg, value);
+
+        if dest_reg == IND_HL_REGID || src_reg == IND_HL_REGID { 8 } else { 4 }
+    }
+
+    fn ld_r_n(&mut self, dest_reg: u8) -> usize {
+        let value = self.mem.read(self.regs.pc+1);
+        println!("{:04x}: LD {}, ${:02x}", self.regs.pc, self.get_reg8_name(dest_reg), value);
+        self.regs.pc += 2;
+
+        self.set_reg8_by_id(dest_reg, value);
+
+        if dest_reg == IND_HL_REGID { 12 } else { 8 }
+    }
+
+    fn ld_a_ind_nn(&mut self) -> usize {
+        let address = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
+        println!("{:04x}: LD A, (${:04x})", self.regs.pc, address);
+        self.regs.pc += 3;
+
+        self.regs.a = self.mem.read(address);
+
+        16
     }
 
     fn decode_cb(&mut self) -> usize {

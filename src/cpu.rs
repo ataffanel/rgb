@@ -20,12 +20,27 @@ const L_REGID: u8 = 5;
 const IND_HL_REGID: u8 = 6;
 const A_REGID: u8 = 7;
 
+const REG_NAMES: &'static [ &'static str ] = &["B", "C", "D", "E", "H", "L", "(HL)", "A"];
+
 // 16Bit register id as encoded in instructions
 const BC_REGID: u8 = 0;
 const DE_REGID: u8 = 1;
 const HL_REGID: u8 = 2;
 const SP_REGID: u8 = 3;
 
+const DD_NAMES: &'static [ &'static str ] = &["BC", "DE", "HL", "SP"];
+
+// ALU operations
+const ALU_ADD: u8 = 0;
+const ALU_ADC: u8 = 1;
+const ALU_SUB: u8 = 2;
+const ALU_SBC: u8 = 3;
+const ALU_AND: u8 = 4;
+const ALU_XOR: u8 = 5;
+const ALU_OR : u8 = 6;
+const ALU_CP : u8 = 7;
+
+const ALU_NAMES: &'static [ &'static str ] = &["ADD", "ADC", "SUB", "SBC", "AND", "XOR", "OR", "CP"];
 
 struct Regs {
     a: u8,
@@ -63,6 +78,7 @@ pub struct Cpu {
     regs: Regs,
     mem: Mem,
     cycle: usize,
+    halted: bool,
 }
 
 impl Cpu {
@@ -83,6 +99,7 @@ impl Cpu {
             },
             mem: Mem::new(cart),
             cycle: 0,
+            halted: false,
         }
     }
 
@@ -138,16 +155,25 @@ impl Cpu {
         }
     }
 
-    fn get_reg8_name(&self, id: u8) -> &str {
+    fn set_reg16_by_id(&mut self, id: u8, value: u16) {
+        let valh = (value >> 8) as u8;
+        let vall = value as u8;
+
         match id {
-            B_REGID => "B",
-            C_REGID => "C",
-            D_REGID => "D",
-            E_REGID => "E",
-            H_REGID => "H",
-            L_REGID => "L",
-            IND_HL_REGID => "(HL)",
-            A_REGID => "A",
+            BC_REGID => {self.regs.b = valh; self.regs.c = vall; },
+            DE_REGID => {self.regs.d = valh; self.regs.e = vall; },
+            HL_REGID => {self.regs.h = valh; self.regs.l = vall; },
+            SP_REGID => self.regs.sp = value,
+            _ => panic!("Wrong reg id")
+        }
+    }
+
+    fn get_reg16_by_id(&self, id: u8) -> u16 {
+        match id {
+            BC_REGID => (self.regs.b as u16)<<8 | self.regs.c as u16,
+            DE_REGID => (self.regs.d as u16)<<8 | self.regs.e as u16,
+            HL_REGID => (self.regs.h as u16)<<8 | self.regs.l as u16,
+            SP_REGID => self.regs.sp,
             _ => panic!("Wrong reg id")
         }
     }
@@ -157,14 +183,16 @@ impl Cpu {
         match instr {
             0x00 => self.nop(),
             0x20 => self.jr_nz_r8(),
-            0x01 | 0x11 | 0x21 | 0x31 => self.ld16_val(instr),
-            0x02 | 0x12 | 0x22 | 0x32 => self.store8_ind(instr),
-            0xA8 ... 0xAD | 0xAF => self.xor_reg(instr),
             0xC3 => self.jp_nn(),
             0xCB => self.decode_cb(),
             0xFA => self.ld_a_ind_nn(),
+            0x76 => self.halt(),
+            0x10 => self.stop(),
+            _ if instr&0xCF == 0x01 => self.ld_dd_nn((instr>>4)&0x03),
+            _ if instr&0xCF == 0x02 => self.store8_ind(instr),
             _ if instr&0xC7 == 0x06 => self.ld_r_n((instr>>3)&0x7),
             _ if instr&0xC0 == 0x40 => self.ld_r_r((instr>>3)&0x7, instr&0x7),
+            _ if instr&0xC0 == 0x80 => self.alu((instr>>3)&0x7, instr&0x7),
             _ => {
                 println!("\n{:?}", self.regs);
                 panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
@@ -174,6 +202,18 @@ impl Cpu {
 
     fn nop(&mut self) -> usize {
         println!("{:04x}: NOP", self.regs.pc);
+        self.regs.pc += 1;
+        4
+    }
+
+    fn halt(&mut self) -> usize {
+        println!("{:04x}: HALT", self.regs.pc);
+        self.regs.pc += 1;
+        4
+    }
+
+    fn stop(&mut self) -> usize {
+        println!("{:04x}: STOP", self.regs.pc);
         self.regs.pc += 1;
         4
     }
@@ -200,23 +240,14 @@ impl Cpu {
         }
     }
 
-    fn ld16_val(&mut self, instr: u8) -> usize {
-        let (val_l, val_h) = (self.mem.read(self.regs.pc+1), self.mem.read(self.regs.pc+2));
-
-        let reg_name = match instr {
-            0x01 => {self.regs.b = val_h; self.regs.c = val_l; "BC"},
-            0x11 => {self.regs.d = val_h; self.regs.e = val_l; "DE"},
-            0x21 => {self.regs.h = val_h; self.regs.l = val_l; "HL"},
-            0x31 => {self.regs.sp = (val_h as u16) << 8 | val_l as u16; "SP"},
-            _ => panic!("Bug in decoding")
-        };
-
-        if val_l == 0 && val_h == 0 {
-
-        }
-
-        println!("{:04x}: LD {}, ${:02x}{:02x}", self.regs.pc, reg_name, val_h, val_l);
+    fn ld_dd_nn(&mut self, reg_id: u8) -> usize {
+        let value = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
+        println!("{:04x}: LD {}, ${:04x}", self.regs.pc, DD_NAMES[reg_id as usize], value);
         self.regs.pc += 3;
+
+
+        self.set_reg16_by_id(reg_id, value);
+
         12
     }
 
@@ -252,32 +283,80 @@ impl Cpu {
         8
     }
 
-    fn xor_reg(&mut self, instr: u8) -> usize {
+    fn alu(&mut self, operation: u8, reg_id: u8) -> usize {
+        println!("{:04x}: {} {}", self.regs.pc, ALU_NAMES[operation as usize], REG_NAMES[reg_id as usize]);
+        self.regs.pc += 1;
 
-        let reg_name = match instr {
-            0xA8 => {self.regs.a = self.regs.a ^ self.regs.b; "B"},
-            0xA9 => {self.regs.a = self.regs.a ^ self.regs.c; "C"},
-            0xAA => {self.regs.a = self.regs.a ^ self.regs.d; "D"},
-            0xAB => {self.regs.a = self.regs.a ^ self.regs.e; "E"},
-            0xAC => {self.regs.a = self.regs.a ^ self.regs.h; "H"},
-            0xAD => {self.regs.a = self.regs.a ^ self.regs.l; "L"},
-            0xAF => {self.regs.a = self.regs.a ^ self.regs.a; "A"},
-            _ => panic!("Bug in decoding")
-        };
-
-        if self.regs.a == 0 {
-            self.set_flag(ZERO_FLAG, true);
-        } else {
-            self.set_flag(ZERO_FLAG, false);
+        let reg = self.get_reg8_by_id(reg_id) as u16;
+        let a = self.regs.a as u16;
+        let result;
+        match operation {
+            ALU_ADD => {
+                result = a + reg;
+                self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
+                self.set_flag(SUBSTRACT_FLAG, false);
+                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(CARRY_FLAG, result&0x800 != 0);
+            },
+            ALU_ADC => {
+                result = a + reg + (if self.get_flag(CARRY_FLAG) { 1 } else { 0 });
+                self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
+                self.set_flag(SUBSTRACT_FLAG, false);
+                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(CARRY_FLAG, result&0x800 != 0);
+            },
+            ALU_SUB => {
+                result = a + !reg + 1;
+                self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
+                self.set_flag(SUBSTRACT_FLAG, true);
+                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(CARRY_FLAG, result&0x800 != 0);
+            },
+            ALU_SBC => {
+                result = a + !reg + 1 + (if self.get_flag(CARRY_FLAG) { 0xff } else { 0 });
+                self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
+                self.set_flag(SUBSTRACT_FLAG, true);
+                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(CARRY_FLAG, result&0x800 != 0);
+            },
+            ALU_AND => {
+                result = a & reg;
+                self.set_flag(HALF_CARRY_FLAG, true);
+                self.set_flag(SUBSTRACT_FLAG, false);
+                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(CARRY_FLAG, false);
+            },
+            ALU_XOR => {
+                result = a ^ reg;
+                self.set_flag(HALF_CARRY_FLAG, false);
+                self.set_flag(SUBSTRACT_FLAG, false);
+                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(CARRY_FLAG, false);
+            },
+            ALU_OR => {
+                result = a | reg;
+                self.set_flag(HALF_CARRY_FLAG, false);
+                self.set_flag(SUBSTRACT_FLAG, false);
+                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(CARRY_FLAG, false);
+            },
+            ALU_CP => {
+                result = a;
+                self.set_flag(HALF_CARRY_FLAG, true);
+                self.set_flag(SUBSTRACT_FLAG, false);
+                self.set_flag(ZERO_FLAG, a == result);
+                self.set_flag(CARRY_FLAG, false);
+            },
+            _ => panic!("wrong ALU operation"),
         }
 
-        println!("{:04x}: XOR {}", self.regs.pc, reg_name);
-        self.regs.pc += 1;
-        4
+        self.regs.a = result as u8;
+
+        if reg_id == IND_HL_REGID { 8 } else { 4 }
     }
 
     fn ld_r_r(&mut self, dest_reg:u8, src_reg:u8) -> usize {
-        println!("{:04x}: LD {}, {}", self.regs.pc, self.get_reg8_name(dest_reg), self.get_reg8_name(src_reg));
+        println!("{:04x}: LD {}, {}", self.regs.pc, REG_NAMES[dest_reg as usize], REG_NAMES[src_reg as usize]);
         self.regs.pc += 1;
 
         let value = self.get_reg8_by_id(src_reg);
@@ -288,7 +367,7 @@ impl Cpu {
 
     fn ld_r_n(&mut self, dest_reg: u8) -> usize {
         let value = self.mem.read(self.regs.pc+1);
-        println!("{:04x}: LD {}, ${:02x}", self.regs.pc, self.get_reg8_name(dest_reg), value);
+        println!("{:04x}: LD {}, ${:02x}", self.regs.pc, REG_NAMES[dest_reg as usize], value);
         self.regs.pc += 2;
 
         self.set_reg8_by_id(dest_reg, value);

@@ -213,7 +213,8 @@ impl Cpu {
             _ if instr&0xC7 == 0xC6 => self.alu(true, (instr>>3)&0x7, 0),
             _ if instr&0xC7 == 0xC7 => self.rst(instr&0x38),
             _ if instr&0xC7 == 0x03 => self.inc_dec_dd(instr&0x04==0, (instr>>4)&0x03),
-            _ if instr&0xC3 == 0x04 => self.inc_dec_r(instr&0x01==0, (instr>>3)&0x07),
+            _ if instr&0xC6 == 0x04 => self.inc_dec_r(instr&0x01==0, (instr>>3)&0x07),
+            _ if instr&0xEF == 0xE2 => self.ld_c(instr&0x10==0),
             _ => {
                 println!("\n{:?}", self.regs);
                 panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
@@ -270,6 +271,18 @@ impl Cpu {
         self.regs.pc = address as u16;
 
         16
+    }
+
+    fn ld_c(&mut self, store: bool) -> usize {
+        if store {
+            println!("{:04x}: LD ($FF00 + C), A", self.regs.pc);
+            self.mem.write(0xff00 + (self.regs.c as u16), self.regs.a);
+        } else {
+            println!("{:04x}: LD A, ($FF00 + C)", self.regs.pc);
+            self.regs.a = self.mem.read(0xff00 + (self.regs.c as u16));
+        }
+        self.regs.pc += 1;
+        12
     }
 
     fn ld_dd_nn(&mut self, reg_id: u8) -> usize {

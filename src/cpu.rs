@@ -1,6 +1,7 @@
 // Emulation of the Game Boy LR35902 cpu
 
-use cart;
+use cart::Cart;
+use mem::Mem;
 
 use std::fmt;
 
@@ -60,12 +61,12 @@ impl Regs {
 
 pub struct Cpu {
     regs: Regs,
-    mem: cart::Cart,
+    mem: Mem,
     cycle: usize,
 }
 
 impl Cpu {
-    pub fn new(cart: cart::Cart) -> Cpu {
+    pub fn new(cart: Cart) -> Cpu {
         Cpu {
             regs: Regs {
                 a: 0,
@@ -80,7 +81,7 @@ impl Cpu {
                 pc: 0,
                 sp: 0,
             },
-            mem: cart,
+            mem: Mem::new(cart),
             cycle: 0,
         }
     }

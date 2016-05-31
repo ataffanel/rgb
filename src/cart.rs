@@ -3,12 +3,11 @@ use std::io;
 use std::io::prelude::*;
 use std::fs::File;
 
-use std::fmt;
-
 pub struct Cart {
     pub rom: Vec<u8>,
 }
 
+#[derive(Debug)]
 pub struct CartLoadError {
     pub error: String,
 }
@@ -44,11 +43,5 @@ impl From<io::Error> for CartLoadError {
         CartLoadError {
             error: format!("{:?}", err)
         }
-    }
-}
-
-impl fmt::Debug for CartLoadError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.error)
     }
 }

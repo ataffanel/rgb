@@ -1,10 +1,14 @@
 
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 use std::env;
 
 // use cart::Cart;
 
 mod cart;
 mod cpu;
+mod mem;
 
 fn main() {
     if env::args().len() != 2 {

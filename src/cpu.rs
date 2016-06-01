@@ -48,6 +48,8 @@ const COND_Z : u8 = 1;
 const COND_NC: u8 = 2;
 const COND_C : u8 = 3;
 
+const COND_NAMES: &'static [ &'static str ] = &["NZ", "Z", "NC", "C"];
+
 struct Regs {
     a: u8,
     b: u8,
@@ -204,9 +206,11 @@ impl Cpu {
             0x76 => self.halt(),
             0x10 => self.stop(),
             0x18 => self.jr(false, 0),
+            0xCD => self.call(false, 0),
+            0xC9 => self.ret(false, 0),
             _ if instr&0xE7 == 0x20 => self.jr(true, (instr>>3)&0x03),
             _ if instr&0xCF == 0x01 => self.ld_dd_nn((instr>>4)&0x03),
-            _ if instr&0xCF == 0x02 => self.store8_ind(instr),
+            _ if instr&0xC7 == 0x02 => self.ld_ind(instr&0x08==0, (instr>>4)&0x03),
             _ if instr&0xC7 == 0x06 => self.ld_r_n((instr>>3)&0x7),
             _ if instr&0xC0 == 0x40 => self.ld_r_r((instr>>3)&0x7, instr&0x7),
             _ if instr&0xC0 == 0x80 => self.alu(false, (instr>>3)&0x7, instr&0x7),
@@ -214,7 +218,11 @@ impl Cpu {
             _ if instr&0xC7 == 0xC7 => self.rst(instr&0x38),
             _ if instr&0xC7 == 0x03 => self.inc_dec_dd(instr&0x04==0, (instr>>4)&0x03),
             _ if instr&0xC6 == 0x04 => self.inc_dec_r(instr&0x01==0, (instr>>3)&0x07),
-            _ if instr&0xEF == 0xE2 => self.ld_c(instr&0x10==0),
+            _ if instr&0xED == 0xE0 => self.ldh(instr&0x02==0, instr&0x10==0),
+            _ if instr&0xED == 0xC4 => self.call(true, (instr>>3)&0x03),
+            _ if instr&0xED == 0xC0 => self.ret(true, (instr>>3)&0x03),
+            _ if instr&0xCF == 0xC1 => self.push_pop_qq(true, (instr>>4)&0x03),
+            _ if instr&0xCF == 0xC5 => self.push_pop_qq(false, (instr>>4)&0x03),
             _ => {
                 println!("\n{:?}", self.regs);
                 panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
@@ -273,16 +281,59 @@ impl Cpu {
         16
     }
 
-    fn ld_c(&mut self, store: bool) -> usize {
-        if store {
-            println!("{:04x}: LD ($FF00 + C), A", self.regs.pc);
-            self.mem.write(0xff00 + (self.regs.c as u16), self.regs.a);
+    fn call(&mut self, conditional: bool, condition: u8) -> usize {
+        let newpc = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
+        let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
+        println!("{:04x}: CALL {}${:04x}", self.regs.pc, cond_str, newpc);
+        self.regs.pc += 3;
+        if !conditional || self.test_condition(condition) {
+            self.mem.write(self.regs.sp-1, (self.regs.pc>>8) as u8);
+            self.mem.write(self.regs.sp-2, self.regs.pc as u8);
+            self.regs.sp -= 2;
+            self.regs.pc = newpc;
+            24
         } else {
-            println!("{:04x}: LD A, ($FF00 + C)", self.regs.pc);
-            self.regs.a = self.mem.read(0xff00 + (self.regs.c as u16));
+            12
         }
+    }
+
+    fn ret(&mut self, conditional: bool, condition: u8) -> usize {
+        let cond_str = if conditional { format!(" {}", COND_NAMES[condition as usize]) } else { String::from("") };
+        println!("{:04x}: RET{}", self.regs.pc, cond_str);
         self.regs.pc += 1;
-        12
+        if !conditional || self.test_condition(condition) {
+            let pc_l = self.mem.read(self.regs.sp);
+            let pc_h = self.mem.read(self.regs.sp+1);
+            self.regs.sp += 2;
+            self.regs.pc = (pc_h as u16)<<8 | pc_l as u16;
+            if conditional { 20 } else { 16 }
+        } else {
+            8
+        }
+    }
+
+    fn ldh(&mut self, immediate: bool, store: bool) -> usize {
+        let address;
+        let addr_str;
+        if immediate {
+            address = self.mem.read(self.regs.pc+1);
+            addr_str = format!("${:02x}", address);
+            self.regs.pc += 2;
+        } else {
+            address = self.regs.c;
+            addr_str = String::from("C");
+            self.regs.pc += 1;
+        }
+
+        if store {
+            println!("{:04x}: LD ($FF00+{}), A", self.regs.pc, addr_str);
+            self.mem.write(0xff00 + (address as u16), self.regs.a);
+        } else {
+            println!("{:04x}: LD A, ($FF00+{})", self.regs.pc, addr_str);
+            self.regs.a = self.mem.read(0xff00 + (address as u16));
+        }
+
+        if immediate { 12 } else { 8 }
     }
 
     fn ld_dd_nn(&mut self, reg_id: u8) -> usize {
@@ -296,36 +347,68 @@ impl Cpu {
         12
     }
 
-    fn store8_ind(&mut self, instr: u8) -> usize {
-        let reg_name = match instr {
-            0x02 => {let addr = (self.regs.b as u16) << 8 | self.regs.c as u16; self.mem.write(addr, self.regs.a); "BC"},
-            0x12 => {let addr = (self.regs.d as u16) << 8 | self.regs.e as u16; self.mem.write(addr, self.regs.a); "DE"},
-            0x22 => {
-                let addr = (self.regs.h as u16) << 8 | self.regs.l as u16;
-                self.mem.write(addr, self.regs.a);
+    fn ld_ind(&mut self, store: bool, reg_id: u8) -> usize {
+        let address: u16;
 
-                let new_hl = addr+1;
+        let (address, reg_name) = match reg_id {
+            0 => ((self.regs.b as u16) << 8 | self.regs.c as u16, "BC"),
+            1 => ((self.regs.d as u16) << 8 | self.regs.e as u16, "DE"),
+            2 => {
+                let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
+                let new_hl = hl+1;
                 self.regs.h = (new_hl >> 8) as u8;
                 self.regs.l = new_hl as u8;
 
-                "HL+"
+                (hl, "HL+")
             },
-            0x32 => {
-                let addr = (self.regs.h as u16) << 8 | self.regs.l as u16;
-                self.mem.write(addr, self.regs.a);
-
-                let new_hl = addr-1;
+            3 => {
+                let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
+                let new_hl = hl-1;
                 self.regs.h = (new_hl >> 8) as u8;
                 self.regs.l = new_hl as u8;
 
-                "HL-"
+                (hl, "HL-")
             },
             _ => panic!("Bug in decoding")
         };
 
-        println!("{:04x}: LD ({}), A", self.regs.pc, reg_name);
+        if store {
+            self.mem.write(address, self.regs.a);
+            println!("{:04x}: LD ({}), A", self.regs.pc, reg_name);
+        } else {
+            self.regs.a = self.mem.read(address);
+            println!("{:04x}: LD A, ({})", self.regs.pc, reg_name);
+        }
+
+
         self.regs.pc += 1;
         8
+    }
+
+    fn push_pop_qq(&mut self, pop: bool, reg_id: u8) -> usize {
+        let (reg_h, reg_l, reg_name) = match reg_id {
+            0 => (&mut self.regs.b, &mut self.regs.c, "BC"),
+            1 => (&mut self.regs.d, &mut self.regs.e, "DE"),
+            2 => (&mut self.regs.h, &mut self.regs.l, "HL"),
+            3 => (&mut self.regs.a, &mut self.regs.f, "AF"),
+            _ => panic!("Bug in decoding")
+        };
+
+        if pop {
+            *reg_l = self.mem.read(self.regs.sp);
+            *reg_h = self.mem.read(self.regs.sp+1);
+            self.regs.sp += 2;
+            println!("{:04x}: POP {}", self.regs.pc, reg_name);
+        } else {
+            self.mem.write(self.regs.sp-1, *reg_h);
+            self.mem.write(self.regs.sp-2, *reg_l);
+            self.regs.sp -= 2;
+            println!("{:04x}: PUSH {}", self.regs.pc, reg_name);
+        }
+
+
+        self.regs.pc += 1;
+        if pop { 12 } else { 16 }
     }
 
     fn alu(&mut self, immediate: bool, operation: u8, reg_id: u8) -> usize {

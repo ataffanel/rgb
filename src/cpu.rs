@@ -50,6 +50,18 @@ const COND_C : u8 = 3;
 
 const COND_NAMES: &'static [ &'static str ] = &["NZ", "Z", "NC", "C"];
 
+// BC ALU operations
+const BCALU_RLC :u8 = 0;
+const BCALU_RRC :u8 = 1;
+const BCALU_RL  :u8 = 2;
+const BCALU_RR  :u8 = 3;
+const BCALU_SLA :u8 = 4;
+const BCALU_SRA :u8 = 5;
+const BCALU_SWAP:u8 = 6;
+const BCALU_SRL :u8 = 7;
+
+const BCALU_NAMES: &'static [ &'static str ] = &["RLC", "RRC", "RL", "RR", "SLA", "SRA", "SWAP", "SRL"];
+
 struct Regs {
     a: u8,
     b: u8,
@@ -556,7 +568,9 @@ impl Cpu {
         let instr = self.mem.read(self.regs.pc);
 
         4 + match instr {
-            _ if (instr & 0xC0) == 0x40 => self.bit((instr >> 3) & 0x07, instr & 0x07),
+            _ if instr&0xC0 == 0x00 => self.bc_alu((instr >> 3) & 0x07, instr & 0x07),
+            _ if instr&0xC0 == 0x40 => self.bit((instr >> 3) & 0x07, instr & 0x07),
+            _ if instr&0x80 == 0x80 => self.res_set(instr&0x40 == 0,(instr >> 3) & 0x07, instr & 0x07),
             _ => {
                 println!("\n{:?}", self.regs);
                 panic!("Uknown prefixed instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
@@ -564,32 +578,54 @@ impl Cpu {
         }
     }
 
-    fn bit(&mut self, bit: u8, reg_id: u8) -> usize {
-        self.set_flag(HALF_CARRY_FLAG, true);
-        self.set_flag(SUBSTRACT_FLAG, false);
+    fn bc_alu(&mut self, operation: u8, reg_id:u8) -> usize {
+        println!("{:04x}: {} {}", self.regs.pc-1, BCALU_NAMES[operation as usize], REG_NAMES[reg_id as usize]);
+        self.regs.pc += 1;
 
-        let (flag, cycles, reg_name) = match reg_id {
-            // Register versions
-            0 => (self.regs.b & (1<<bit) == 0, 8, "B"),
-            1 => (self.regs.c & (1<<bit) == 0, 8, "C"),
-            2 => (self.regs.d & (1<<bit) == 0, 8, "D"),
-            3 => (self.regs.e & (1<<bit) == 0, 8, "E"),
-            4 => (self.regs.h & (1<<bit) == 0, 8, "H"),
-            5 => (self.regs.l & (1<<bit) == 0, 8, "L"),
-            7 => (self.regs.a & (1<<bit) == 0, 8, "A"),
-            // Indirect HL version
-            6 => {
-                let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
-                (self.mem.read(hl) & (1<<bit) == 0, 16, "B")
+        let mut value = self.get_reg8_by_id(reg_id);
+
+        match operation {
+            BCALU_RLC => {
+                self.set_flag(CARRY_FLAG, value&0x80 != 0);
+                value <<= 1;
+                if self.get_flag(CARRY_FLAG) {
+                    value |= 0x01;
+                }
             },
-
             _ => panic!("Bug in decoding")
         };
 
-        self.set_flag(ZERO_FLAG, flag);
+        self.set_reg8_by_id(reg_id, value);
+        self.set_flag(ZERO_FLAG, value == 0);
 
-        println!("{:04x}: BIT {}, {}", self.regs.pc-1, bit, reg_name);
+        if reg_id == IND_HL_REGID {12} else {4}
+    }
+
+    fn bit(&mut self, bit: u8, reg_id: u8) -> usize {
+        println!("{:04x}: BIT {}, {}", self.regs.pc-1, bit, REG_NAMES[reg_id as usize]);
         self.regs.pc += 1;
-        4
+
+        let flag = self.get_reg8_by_id(reg_id) & (1<<bit) == 0;
+        self.set_flag(ZERO_FLAG, flag);
+        self.set_flag(HALF_CARRY_FLAG, true);
+        self.set_flag(SUBSTRACT_FLAG, false);
+
+        if reg_id == IND_HL_REGID {12} else {4}
+    }
+
+    fn res_set(&mut self, res: bool, bit: u8, reg_id: u8) -> usize {
+        println!("{:04x}: {} {}, {}", self.regs.pc-1, if res {"RES"} else {"SET"},
+                                      bit, REG_NAMES[reg_id as usize]);
+        self.regs.pc += 1;
+
+        let mut value = self.get_reg8_by_id(reg_id);
+        if res {
+            value &= !(1<<bit);
+        } else {
+            value |= 1<<bit;
+        }
+        self.set_reg8_by_id(reg_id, value);
+
+        if reg_id == IND_HL_REGID {12} else {4}
     }
 }

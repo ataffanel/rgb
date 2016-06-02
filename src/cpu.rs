@@ -222,7 +222,8 @@ impl Cpu {
             0xC9 => self.ret(false, 0),
             _ if instr&0xE7 == 0x20 => self.jr(true, (instr>>3)&0x03),
             _ if instr&0xCF == 0x01 => self.ld_dd_nn((instr>>4)&0x03),
-            _ if instr&0xC7 == 0x02 => self.ld_ind(instr&0x08==0, (instr>>4)&0x03),
+            _ if instr&0xC7 == 0x02 => self.ld_ind(false, instr&0x08==0, (instr>>4)&0x03),
+            _ if instr&0xEF == 0xEA => self.ld_ind(true, instr&0x10==0, 0),
             _ if instr&0xC7 == 0x06 => self.ld_r_n((instr>>3)&0x7),
             _ if instr&0xC0 == 0x40 => self.ld_r_r((instr>>3)&0x7, instr&0x7),
             _ if instr&0xC0 == 0x80 => self.alu(false, (instr>>3)&0x7, instr&0x7),
@@ -235,6 +236,7 @@ impl Cpu {
             _ if instr&0xED == 0xC0 => self.ret(true, (instr>>3)&0x03),
             _ if instr&0xCF == 0xC1 => self.push_pop_qq(true, (instr>>4)&0x03),
             _ if instr&0xCF == 0xC5 => self.push_pop_qq(false, (instr>>4)&0x03),
+            _ if instr&0xE7 == 0x07 => self.rotate((instr>>3)&0x03),
             _ => {
                 println!("\n{:?}", self.regs);
                 panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
@@ -359,29 +361,34 @@ impl Cpu {
         12
     }
 
-    fn ld_ind(&mut self, store: bool, reg_id: u8) -> usize {
+    fn ld_ind(&mut self, immediate: bool, store: bool, reg_id: u8) -> usize {
         let address: u16;
 
-        let (address, reg_name) = match reg_id {
-            0 => ((self.regs.b as u16) << 8 | self.regs.c as u16, "BC"),
-            1 => ((self.regs.d as u16) << 8 | self.regs.e as u16, "DE"),
-            2 => {
-                let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
-                let new_hl = hl+1;
-                self.regs.h = (new_hl >> 8) as u8;
-                self.regs.l = new_hl as u8;
+        let (address, reg_name) = if immediate {
+            let addr = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
+            (addr, format!("${:04x}", addr))
+        } else {
+            match reg_id {
+                0 => ((self.regs.b as u16) << 8 | self.regs.c as u16, "BC".to_string()),
+                1 => ((self.regs.d as u16) << 8 | self.regs.e as u16, "DE".to_string()),
+                2 => {
+                    let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
+                    let new_hl = hl+1;
+                    self.regs.h = (new_hl >> 8) as u8;
+                    self.regs.l = new_hl as u8;
 
-                (hl, "HL+")
-            },
-            3 => {
-                let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
-                let new_hl = hl-1;
-                self.regs.h = (new_hl >> 8) as u8;
-                self.regs.l = new_hl as u8;
+                    (hl, "HL+".to_string())
+                },
+                3 => {
+                    let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
+                    let new_hl = hl-1;
+                    self.regs.h = (new_hl >> 8) as u8;
+                    self.regs.l = new_hl as u8;
 
-                (hl, "HL-")
-            },
-            _ => panic!("Bug in decoding")
+                    (hl, "HL-".to_string())
+                },
+                _ => panic!("Bug in decoding")
+            }
         };
 
         if store {
@@ -393,8 +400,13 @@ impl Cpu {
         }
 
 
-        self.regs.pc += 1;
-        8
+        if immediate {
+            self.regs.pc += 3;
+            16
+        } else {
+            self.regs.pc += 1;
+            8
+        }
     }
 
     fn push_pop_qq(&mut self, pop: bool, reg_id: u8) -> usize {
@@ -421,6 +433,49 @@ impl Cpu {
 
         self.regs.pc += 1;
         if pop { 12 } else { 16 }
+    }
+
+    fn rotate(&mut self, operation: u8) -> usize {
+        println!("{:04x}: {}A", self.regs.pc, BCALU_NAMES[operation as usize]);
+        self.regs.pc += 1;
+
+        let mut value = self.regs.a;
+        match operation {
+            BCALU_RLC => {
+                self.set_flag(CARRY_FLAG, value&0x80 != 0);
+                value <<= 1;
+                if self.get_flag(CARRY_FLAG) {
+                    value |= 0x01;
+                }
+            },
+            BCALU_RRC => {
+                    self.set_flag(CARRY_FLAG, value&0x01 != 0);
+                    value >>= 1;
+                    if self.get_flag(CARRY_FLAG) {
+                        value |= 0x80;
+                    }
+                },
+            BCALU_RL => {
+                      let carry = self.get_flag(CARRY_FLAG);
+                    self.set_flag(CARRY_FLAG, value&0x80 != 0);
+                    value <<= 1;
+                    if carry {
+                        value |= 0x01;
+                    }
+                },
+            BCALU_RR => {
+                let carry = self.get_flag(CARRY_FLAG);
+                self.set_flag(CARRY_FLAG, value&0x01 != 0);
+                value >>= 1;
+                if carry {
+                    value |= 0x80;
+                }
+            },
+            _ => panic!("Bug in decoding"),
+        };
+        self.regs.a = value;
+
+        4
     }
 
     fn alu(&mut self, immediate: bool, operation: u8, reg_id: u8) -> usize {
@@ -591,6 +646,48 @@ impl Cpu {
                 if self.get_flag(CARRY_FLAG) {
                     value |= 0x01;
                 }
+            },
+    	    BCALU_RRC => {
+                    self.set_flag(CARRY_FLAG, value&0x01 != 0);
+                    value >>= 1;
+                    if self.get_flag(CARRY_FLAG) {
+                        value |= 0x80;
+                    }
+                },
+    	    BCALU_RL => {
+    		          let carry = self.get_flag(CARRY_FLAG);
+                    self.set_flag(CARRY_FLAG, value&0x80 != 0);
+                    value <<= 1;
+                    if carry {
+                        value |= 0x01;
+                    }
+                },
+            BCALU_RR => {
+                let carry = self.get_flag(CARRY_FLAG);
+                self.set_flag(CARRY_FLAG, value&0x01 != 0);
+                value >>= 1;
+                if carry {
+                    value |= 0x80;
+                }
+            },
+            BCALU_SLA => {
+                self.set_flag(CARRY_FLAG, value&0x80 != 0);
+                value <<= 1;
+            },
+            BCALU_SRA => {
+                let highset = value&0x80 != 0;
+                self.set_flag(CARRY_FLAG, value&0x01 != 0);
+                value >>= 1;
+                if highset {
+                    value |= 0x80;
+                }
+            },
+            BCALU_SWAP => {
+                value = (value << 4) | (value >> 4);
+            },
+            BCALU_SRL => {
+                self.set_flag(CARRY_FLAG, value&0x01 != 0);
+                value >>= 1;
             },
             _ => panic!("Bug in decoding")
         };

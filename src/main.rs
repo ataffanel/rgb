@@ -37,7 +37,18 @@ fn main() {
 
     let mut cpu = cpu::Cpu::new(cart);
 
-    println!("Starting execution at address 0x1000: ");
-    cpu.set_pc(0); //x100);
-    cpu.execute_until(10000000);
+    println!("Starting execution of bootstrap: ");
+    cpu.reset();
+    emulator_loop(cpu);
+
+    println!("Exiting ...");
+}
+
+fn emulator_loop(mut cpu: cpu::Cpu) {
+    loop {
+        let mut irq = false;
+        cpu.step();
+
+        if cpu.cycle >= 10000000 {break;}
+    }
 }

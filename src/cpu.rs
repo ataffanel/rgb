@@ -96,8 +96,8 @@ impl Regs {
 
 pub struct Cpu {
     regs: Regs,
-    mem: Mem,
-    cycle: usize,
+    pub mem: Mem,
+    pub cycle: usize,
     halted: bool,
     stoped: bool,
     interrupts_enabled: bool,
@@ -137,6 +137,14 @@ impl Cpu {
         while self.cycle < cycle {
             self.cycle += self.decode();
         }
+    }
+
+    pub fn step(&mut self) {
+        self.cycle += self.decode();
+    }
+
+    pub fn reset(&mut self) {
+        self.regs.pc = 0;
     }
 
     pub fn get_cycle(&self) -> usize { self.cycle }
@@ -257,7 +265,7 @@ impl Cpu {
             _ if instr&0xCF == 0x09 => self.add_hl_ss((instr&0x30)>>4),
             _ => {
                 println!("\n{:?}", self.regs);
-                panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
+                panic!("Invalid instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
             }
         };
         self.interrupts_enabled = interrupts_enabled_next;

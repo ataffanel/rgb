@@ -99,6 +99,8 @@ pub struct Cpu {
     mem: Mem,
     cycle: usize,
     halted: bool,
+    stoped: bool,
+    interrupts_enabled: bool,
 }
 
 impl Cpu {
@@ -120,6 +122,8 @@ impl Cpu {
             mem: Mem::new(cart),
             cycle: 0,
             halted: false,
+            stoped: false,
+            interrupts_enabled: false,
         }
     }
 
@@ -212,7 +216,8 @@ impl Cpu {
         let instr = self.mem.read(self.regs.pc);
         match instr {
             0x00 => self.nop(),
-            0xC3 => self.jp_nn(),
+            0xC3 => self.jp(true, false, 0),
+            0xe9 => self.jp(false, false, 0),
             0xCB => self.decode_cb(),
             0xFA => self.ld_a_ind_nn(),
             0x76 => self.halt(),
@@ -220,7 +225,10 @@ impl Cpu {
             0x18 => self.jr(false, 0),
             0xCD => self.call(false, 0),
             0xC9 => self.ret(false, 0),
+            0x2F => self.cpl(),
+            0x3f => self.ccf(),
             _ if instr&0xE7 == 0x20 => self.jr(true, (instr>>3)&0x03),
+            _ if instr&0xE7 == 0xC2 => self.jp(true, true, (instr>>3)&0x03),
             _ if instr&0xCF == 0x01 => self.ld_dd_nn((instr>>4)&0x03),
             _ if instr&0xC7 == 0x02 => self.ld_ind(false, instr&0x08==0, (instr>>4)&0x03),
             _ if instr&0xEF == 0xEA => self.ld_ind(true, instr&0x10==0, 0),
@@ -237,6 +245,8 @@ impl Cpu {
             _ if instr&0xCF == 0xC1 => self.push_pop_qq(true, (instr>>4)&0x03),
             _ if instr&0xCF == 0xC5 => self.push_pop_qq(false, (instr>>4)&0x03),
             _ if instr&0xE7 == 0x07 => self.rotate((instr>>3)&0x03),
+            _ if instr&0xF3 == 0xF3 => self.dei(instr&0x80 != 0),
+            _ if instr&0xCF == 0x09 => self.add_hl_ss((instr&0x30)>>4),
             _ => {
                 println!("\n{:?}", self.regs);
                 panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
@@ -252,28 +262,49 @@ impl Cpu {
 
     fn halt(&mut self) -> usize {
         println!("{:04x}: HALT", self.regs.pc);
+        self.halted = true;
         self.regs.pc += 1;
         4
     }
 
     fn stop(&mut self) -> usize {
         println!("{:04x}: STOP", self.regs.pc);
+        self.stoped = true;
         self.regs.pc += 1;
         4
     }
 
-    fn jp_nn(&mut self) -> usize{
-        let address = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
-        println!("{:04x}: JP ${:04x}", self.regs.pc, address);
+    fn dei(&mut self, enable: bool) -> usize {
+        println!("{:04x}: {}", self.regs.pc, if enable {"EI"} else {"DI"});
+        self.interrupts_enabled = enable;
+        self.regs.pc += 1;
+        4
+    }
 
-        self.regs.pc = address;
+    fn jp(&mut self, immediate: bool, conditional: bool, condition: u8) -> usize {
+        let address;
+        if immediate{
+            address = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
+            let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
+            println!("{:04x}: JP {}${:04x}", self.regs.pc, cond_str, address);
+        } else {
+            address = self.get_reg16_by_id(HL_REGID);
+            println!("{:04x}: JP (HL)", self.regs.pc);
+        }
 
-        12
+        if !conditional || self.test_condition(condition) {
+            self.regs.pc = address;
+
+            if immediate {16} else {4}
+        } else {
+            12
+        }
     }
 
     fn jr(&mut self, conditional: bool, condition: u8) -> usize {
         let val = self.mem.read(self.regs.pc+1) as i8;
-        println!("{:04x}: JR NZ, {}", self.regs.pc, val);
+        let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
+        println!("{:04x}: JR {}{}", self.regs.pc, cond_str, val);
         self.regs.pc += 2;
         if !conditional || self.test_condition(condition) {
             let newpc = (self.regs.pc as i32) + (val as i32);
@@ -474,6 +505,42 @@ impl Cpu {
             _ => panic!("Bug in decoding"),
         };
         self.regs.a = value;
+
+        4
+    }
+
+    fn add_hl_ss(&mut self, reg_id: u8) -> usize {
+        println!("{:04x}: ADD HL, {}", self.regs.pc, DD_NAMES[reg_id as usize]);
+
+        let value = self.get_reg16_by_id(reg_id) as u32 + self.get_reg16_by_id(HL_REGID) as u32;
+        self.set_reg16_by_id(HL_REGID, value as u16);
+
+        self.set_flag(ZERO_FLAG, value == 0);
+        self.set_flag(SUBSTRACT_FLAG, false);
+        self.set_flag(CARRY_FLAG, value&0x10000 != 0);
+
+        8
+    }
+
+    fn cpl(&mut self) -> usize {
+        println!("{:04x}: CPL", self.regs.pc);
+        self.regs.pc += 1;
+
+        self.regs.a = !self.regs.a;
+        self.set_flag(SUBSTRACT_FLAG, true);
+        self.set_flag(HALF_CARRY_FLAG, true);
+
+        4
+    }
+
+    fn ccf(&mut self) -> usize {
+        println!("{:04x}: CPL", self.regs.pc);
+        self.regs.pc += 1;
+
+        let cy = self.get_flag(CARRY_FLAG);
+        self.set_flag(CARRY_FLAG, !cy);
+        self.set_flag(SUBSTRACT_FLAG, false);
+        self.set_flag(HALF_CARRY_FLAG, false);
 
         4
     }

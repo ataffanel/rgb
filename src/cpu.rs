@@ -101,6 +101,7 @@ pub struct Cpu {
     halted: bool,
     stoped: bool,
     interrupts_enabled: bool,
+    interrupts_enabled_next: bool,
 }
 
 impl Cpu {
@@ -123,6 +124,7 @@ impl Cpu {
             cycle: 0,
             halted: false,
             stoped: false,
+            interrupts_enabled_next: false,
             interrupts_enabled: false,
         }
     }
@@ -213,11 +215,13 @@ impl Cpu {
     }
 
     fn decode(&mut self) -> usize {
+        let mut interrupts_enabled_next = self.interrupts_enabled_next;
+
         let instr = self.mem.read(self.regs.pc);
-        match instr {
+        let cycle = match instr {
             0x00 => self.nop(),
             0xC3 => self.jp(true, false, 0),
-            0xe9 => self.jp(false, false, 0),
+            0xE9 => self.jp(false, false, 0),
             0xCB => self.decode_cb(),
             0xFA => self.ld_a_ind_nn(),
             0x76 => self.halt(),
@@ -225,8 +229,12 @@ impl Cpu {
             0x18 => self.jr(false, 0),
             0xCD => self.call(false, 0),
             0xC9 => self.ret(false, 0),
+            0xD9 => {interrupts_enabled_next = true; self.reti()},
             0x2F => self.cpl(),
             0x3f => self.ccf(),
+            0xE8 => self.add_sp_r8(),
+            0xF8 => self.ld_hl_sp_r8(),
+            0xF9 => self.ld_sp_hl(),
             _ if instr&0xE7 == 0x20 => self.jr(true, (instr>>3)&0x03),
             _ if instr&0xE7 == 0xC2 => self.jp(true, true, (instr>>3)&0x03),
             _ if instr&0xCF == 0x01 => self.ld_dd_nn((instr>>4)&0x03),
@@ -251,7 +259,10 @@ impl Cpu {
                 println!("\n{:?}", self.regs);
                 panic!("Uknown instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
             }
-        }
+        };
+        self.interrupts_enabled = interrupts_enabled_next;
+
+        cycle
     }
 
     fn nop(&mut self) -> usize {
@@ -276,7 +287,7 @@ impl Cpu {
 
     fn dei(&mut self, enable: bool) -> usize {
         println!("{:04x}: {}", self.regs.pc, if enable {"EI"} else {"DI"});
-        self.interrupts_enabled = enable;
+        self.interrupts_enabled_next = enable;
         self.regs.pc += 1;
         4
     }
@@ -357,6 +368,20 @@ impl Cpu {
         }
     }
 
+    fn reti(&mut self) -> usize {
+        println!("{:04x}: RETI", self.regs.pc);
+
+        let pc_l = self.mem.read(self.regs.sp);
+        let pc_h = self.mem.read(self.regs.sp+1);
+        self.regs.sp += 2;
+        self.regs.pc = (pc_h as u16)<<8 | pc_l as u16;
+
+        self.interrupts_enabled = true;
+        self.interrupts_enabled_next = true;
+
+        16
+    }
+
     fn ldh(&mut self, immediate: bool, store: bool) -> usize {
         let address;
         let addr_str;
@@ -390,6 +415,15 @@ impl Cpu {
         self.set_reg16_by_id(reg_id, value);
 
         12
+    }
+
+    fn ld_sp_hl(&mut self) -> usize {
+        println!("{:04x}: LD SP, HL", self.regs.pc);
+        self.regs.pc += 1;
+
+        self.regs.sp = self.get_reg16_by_id(HL_REGID);
+
+        8
     }
 
     fn ld_ind(&mut self, immediate: bool, store: bool, reg_id: u8) -> usize {
@@ -438,6 +472,22 @@ impl Cpu {
             self.regs.pc += 1;
             8
         }
+    }
+
+    fn ld_hl_sp_r8(&mut self) -> usize {
+        let value = self.mem.read(self.regs.pc+1) as i8;
+        println!("{:04x}: LD HL, SP{:+}", self.regs.pc, value);
+        self.regs.pc += 2;
+
+        let result = self.regs.sp as i32 + value as i32;
+        self.set_reg16_by_id(HL_REGID, result as u16);
+
+        self.set_flag(ZERO_FLAG, false);
+        self.set_flag(SUBSTRACT_FLAG, false);
+        self.set_flag(HALF_CARRY_FLAG, result&0x100 != 0); // Is that right?
+        self.set_flag(CARRY_FLAG, result&0x10000 != 0);
+
+        12
     }
 
     fn push_pop_qq(&mut self, pop: bool, reg_id: u8) -> usize {
@@ -508,6 +558,24 @@ impl Cpu {
 
         4
     }
+
+    fn add_sp_r8(&mut self) -> usize {
+        let value = self.mem.read(self.regs.pc+1) as i8;
+        println!("{:04x}: ADD SP, {}", self.regs.pc, value);
+        self.regs.pc += 2;
+
+        let result = self.regs.sp as i32 + value as i32;
+        self.regs.sp = result as u16;
+
+        self.set_flag(ZERO_FLAG, false);
+        self.set_flag(SUBSTRACT_FLAG, false);
+        self.set_flag(HALF_CARRY_FLAG, result&0x100 != 0); // Is that right?
+        self.set_flag(CARRY_FLAG, result&0x10000 != 0);
+
+        16
+    }
+
+
 
     fn add_hl_ss(&mut self, reg_id: u8) -> usize {
         println!("{:04x}: ADD HL, {}", self.regs.pc, DD_NAMES[reg_id as usize]);

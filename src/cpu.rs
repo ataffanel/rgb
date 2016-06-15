@@ -5,6 +5,28 @@ use mem::Mem;
 
 use std::fmt;
 
+#[cfg(feature="trace_cpu")]
+macro_rules! trace {
+    ( $($x:expr), * ) => {
+        println!(
+            $(
+                $x,
+            )*
+        )
+    }
+}
+
+#[cfg(not(feature="trace_cpu"))]
+macro_rules! trace {
+    ( $($x:expr), * ) => ()
+}
+
+pub const IRQ_VBLANK: u8 = 0x01;
+pub const IRQ_LCDSTAT: u8 = 0x02;
+pub const IRQ_TIMER: u8 = 0x04;
+pub const IRQ_SERIAL: u8 = 0x08;
+pub const IRQ_JOYPAD: u8 = 0x10;
+
 const ZERO_FLAG: u8 = 1<<7;
 const SUBSTRACT_FLAG: u8 = 1<<6;
 const HALF_CARRY_FLAG: u8 = 1<<5;
@@ -133,14 +155,18 @@ impl Cpu {
         self.regs.pc = pc;
     }
 
+    pub fn get_pc(&self) -> u16 { self.regs.pc }
+
     pub fn execute_until(&mut self, cycle: usize) {
         while self.cycle < cycle {
             self.cycle += self.decode();
+            trace!("{:?}", self.regs);
         }
     }
 
     pub fn step(&mut self) {
         self.cycle += self.decode();
+        trace!("{:?}", self.regs);
     }
 
     pub fn reset(&mut self) {
@@ -264,7 +290,7 @@ impl Cpu {
             _ if instr&0xF3 == 0xF3 => self.dei(instr&0x80 != 0),
             _ if instr&0xCF == 0x09 => self.add_hl_ss((instr&0x30)>>4),
             _ => {
-                println!("\n{:?}", self.regs);
+                trace!("\n{:?}", self.regs);
                 panic!("Invalid instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
             }
         };
@@ -274,27 +300,27 @@ impl Cpu {
     }
 
     fn nop(&mut self) -> usize {
-        println!("{:04x}: NOP", self.regs.pc);
+        trace!("{:04x}: NOP", self.regs.pc);
         self.regs.pc += 1;
         4
     }
 
     fn halt(&mut self) -> usize {
-        println!("{:04x}: HALT", self.regs.pc);
+        trace!("{:04x}: HALT", self.regs.pc);
         self.halted = true;
         self.regs.pc += 1;
         4
     }
 
     fn stop(&mut self) -> usize {
-        println!("{:04x}: STOP", self.regs.pc);
+        trace!("{:04x}: STOP", self.regs.pc);
         self.stoped = true;
         self.regs.pc += 1;
         4
     }
 
     fn dei(&mut self, enable: bool) -> usize {
-        println!("{:04x}: {}", self.regs.pc, if enable {"EI"} else {"DI"});
+        trace!("{:04x}: {}", self.regs.pc, if enable {"EI"} else {"DI"});
         self.interrupts_enabled_next = enable;
         self.regs.pc += 1;
         4
@@ -305,10 +331,10 @@ impl Cpu {
         if immediate{
             address = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
             let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
-            println!("{:04x}: JP {}${:04x}", self.regs.pc, cond_str, address);
+            trace!("{:04x}: JP {}${:04x}", self.regs.pc, cond_str, address);
         } else {
             address = self.get_reg16_by_id(HL_REGID);
-            println!("{:04x}: JP (HL)", self.regs.pc);
+            trace!("{:04x}: JP (HL)", self.regs.pc);
         }
 
         if !conditional || self.test_condition(condition) {
@@ -323,7 +349,7 @@ impl Cpu {
     fn jr(&mut self, conditional: bool, condition: u8) -> usize {
         let val = self.mem.read(self.regs.pc+1) as i8;
         let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
-        println!("{:04x}: JR {}{}", self.regs.pc, cond_str, val);
+        trace!("{:04x}: JR {}{}", self.regs.pc, cond_str, val);
         self.regs.pc += 2;
         if !conditional || self.test_condition(condition) {
             let newpc = (self.regs.pc as i32) + (val as i32);
@@ -336,7 +362,7 @@ impl Cpu {
     }
 
     fn rst(&mut self, address: u8) -> usize {
-        println!("{:04x}: RST ${:02x}", self.regs.pc, address);
+        trace!("{:04x}: RST ${:02x}", self.regs.pc, address);
         self.mem.write(self.regs.sp-1, (self.regs.pc>>8) as u8);
         self.mem.write(self.regs.sp-2, self.regs.pc as u8);
         self.regs.sp -= 2;
@@ -348,7 +374,7 @@ impl Cpu {
     fn call(&mut self, conditional: bool, condition: u8) -> usize {
         let newpc = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
         let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
-        println!("{:04x}: CALL {}${:04x}", self.regs.pc, cond_str, newpc);
+        trace!("{:04x}: CALL {}${:04x}", self.regs.pc, cond_str, newpc);
         self.regs.pc += 3;
         if !conditional || self.test_condition(condition) {
             self.mem.write(self.regs.sp-1, (self.regs.pc>>8) as u8);
@@ -363,7 +389,7 @@ impl Cpu {
 
     fn ret(&mut self, conditional: bool, condition: u8) -> usize {
         let cond_str = if conditional { format!(" {}", COND_NAMES[condition as usize]) } else { String::from("") };
-        println!("{:04x}: RET{}", self.regs.pc, cond_str);
+        trace!("{:04x}: RET{}", self.regs.pc, cond_str);
         self.regs.pc += 1;
         if !conditional || self.test_condition(condition) {
             let pc_l = self.mem.read(self.regs.sp);
@@ -377,7 +403,7 @@ impl Cpu {
     }
 
     fn reti(&mut self) -> usize {
-        println!("{:04x}: RETI", self.regs.pc);
+        trace!("{:04x}: RETI", self.regs.pc);
 
         let pc_l = self.mem.read(self.regs.sp);
         let pc_h = self.mem.read(self.regs.sp+1);
@@ -404,10 +430,10 @@ impl Cpu {
         }
 
         if store {
-            println!("{:04x}: LD ($FF00+{}), A", self.regs.pc, addr_str);
+            trace!("{:04x}: LD ($FF00+{}), A", self.regs.pc, addr_str);
             self.mem.write(0xff00 + (address as u16), self.regs.a);
         } else {
-            println!("{:04x}: LD A, ($FF00+{})", self.regs.pc, addr_str);
+            trace!("{:04x}: LD A, ($FF00+{})", self.regs.pc, addr_str);
             self.regs.a = self.mem.read(0xff00 + (address as u16));
         }
 
@@ -416,7 +442,7 @@ impl Cpu {
 
     fn ld_dd_nn(&mut self, reg_id: u8) -> usize {
         let value = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
-        println!("{:04x}: LD {}, ${:04x}", self.regs.pc, DD_NAMES[reg_id as usize], value);
+        trace!("{:04x}: LD {}, ${:04x}", self.regs.pc, DD_NAMES[reg_id as usize], value);
         self.regs.pc += 3;
 
 
@@ -426,7 +452,7 @@ impl Cpu {
     }
 
     fn ld_sp_hl(&mut self) -> usize {
-        println!("{:04x}: LD SP, HL", self.regs.pc);
+        trace!("{:04x}: LD SP, HL", self.regs.pc);
         self.regs.pc += 1;
 
         self.regs.sp = self.get_reg16_by_id(HL_REGID);
@@ -454,7 +480,7 @@ impl Cpu {
                 },
                 3 => {
                     let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
-                    let new_hl = hl-1;
+                    let new_hl = hl.wrapping_sub(1);
                     self.regs.h = (new_hl >> 8) as u8;
                     self.regs.l = new_hl as u8;
 
@@ -466,10 +492,10 @@ impl Cpu {
 
         if store {
             self.mem.write(address, self.regs.a);
-            println!("{:04x}: LD ({}), A", self.regs.pc, reg_name);
+            trace!("{:04x}: LD ({}), A", self.regs.pc, reg_name);
         } else {
             self.regs.a = self.mem.read(address);
-            println!("{:04x}: LD A, ({})", self.regs.pc, reg_name);
+            trace!("{:04x}: LD A, ({})", self.regs.pc, reg_name);
         }
 
 
@@ -484,7 +510,7 @@ impl Cpu {
 
     fn ld_hl_sp_r8(&mut self) -> usize {
         let value = self.mem.read(self.regs.pc+1) as i8;
-        println!("{:04x}: LD HL, SP{:+}", self.regs.pc, value);
+        trace!("{:04x}: LD HL, SP{:+}", self.regs.pc, value);
         self.regs.pc += 2;
 
         let result = self.regs.sp as i32 + value as i32;
@@ -511,12 +537,12 @@ impl Cpu {
             *reg_l = self.mem.read(self.regs.sp);
             *reg_h = self.mem.read(self.regs.sp+1);
             self.regs.sp += 2;
-            println!("{:04x}: POP {}", self.regs.pc, reg_name);
+            trace!("{:04x}: POP {}", self.regs.pc, reg_name);
         } else {
             self.mem.write(self.regs.sp-1, *reg_h);
             self.mem.write(self.regs.sp-2, *reg_l);
             self.regs.sp -= 2;
-            println!("{:04x}: PUSH {}", self.regs.pc, reg_name);
+            trace!("{:04x}: PUSH {}", self.regs.pc, reg_name);
         }
 
 
@@ -525,7 +551,7 @@ impl Cpu {
     }
 
     fn rotate(&mut self, operation: u8) -> usize {
-        println!("{:04x}: {}A", self.regs.pc, BCALU_NAMES[operation as usize]);
+        trace!("{:04x}: {}A", self.regs.pc, BCALU_NAMES[operation as usize]);
         self.regs.pc += 1;
 
         let mut value = self.regs.a;
@@ -545,7 +571,7 @@ impl Cpu {
                     }
                 },
             BCALU_RL => {
-                      let carry = self.get_flag(CARRY_FLAG);
+                    let carry = self.get_flag(CARRY_FLAG);
                     self.set_flag(CARRY_FLAG, value&0x80 != 0);
                     value <<= 1;
                     if carry {
@@ -569,7 +595,7 @@ impl Cpu {
 
     fn add_sp_r8(&mut self) -> usize {
         let value = self.mem.read(self.regs.pc+1) as i8;
-        println!("{:04x}: ADD SP, {}", self.regs.pc, value);
+        trace!("{:04x}: ADD SP, {}", self.regs.pc, value);
         self.regs.pc += 2;
 
         let result = self.regs.sp as i32 + value as i32;
@@ -586,7 +612,7 @@ impl Cpu {
 
 
     fn add_hl_ss(&mut self, reg_id: u8) -> usize {
-        println!("{:04x}: ADD HL, {}", self.regs.pc, DD_NAMES[reg_id as usize]);
+        trace!("{:04x}: ADD HL, {}", self.regs.pc, DD_NAMES[reg_id as usize]);
 
         let value = self.get_reg16_by_id(reg_id) as u32 + self.get_reg16_by_id(HL_REGID) as u32;
         self.set_reg16_by_id(HL_REGID, value as u16);
@@ -599,7 +625,7 @@ impl Cpu {
     }
 
     fn cpl(&mut self) -> usize {
-        println!("{:04x}: CPL", self.regs.pc);
+        trace!("{:04x}: CPL", self.regs.pc);
         self.regs.pc += 1;
 
         self.regs.a = !self.regs.a;
@@ -610,7 +636,7 @@ impl Cpu {
     }
 
     fn ccf(&mut self) -> usize {
-        println!("{:04x}: CPL", self.regs.pc);
+        trace!("{:04x}: CPL", self.regs.pc);
         self.regs.pc += 1;
 
         let cy = self.get_flag(CARRY_FLAG);
@@ -625,11 +651,11 @@ impl Cpu {
         let val: u16;
         if immediate {
             val = self.mem.read(self.regs.pc+1) as u16;
-            println!("{:04x}: {} ${:02x}", self.regs.pc, ALU_NAMES[operation as usize], val);
+            trace!("{:04x}: {} ${:02x}", self.regs.pc, ALU_NAMES[operation as usize], val);
             self.regs.pc += 2;
         } else {
             val = self.get_reg8_by_id(reg_id) as u16;
-            println!("{:04x}: {} {}", self.regs.pc, ALU_NAMES[operation as usize], REG_NAMES[reg_id as usize]);
+            trace!("{:04x}: {} {}", self.regs.pc, ALU_NAMES[operation as usize], REG_NAMES[reg_id as usize]);
             self.regs.pc += 1;
         }
         let a = self.regs.a as u16;
@@ -650,14 +676,14 @@ impl Cpu {
                 self.set_flag(CARRY_FLAG, result&0x800 != 0);
             },
             ALU_SUB => {
-                result = a + !val + 1;
+                result = a + !(val as u8) as u16 + 1;
                 self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
                 self.set_flag(SUBSTRACT_FLAG, true);
                 self.set_flag(ZERO_FLAG, result == 0);
                 self.set_flag(CARRY_FLAG, result&0x800 != 0);
             },
             ALU_SBC => {
-                result = a + !val + 1 + (if self.get_flag(CARRY_FLAG) { 0xff } else { 0 });
+                result = a + !(val as u8) as u16 + 1 + (if self.get_flag(CARRY_FLAG) { 0xff } else { 0 });
                 self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
                 self.set_flag(SUBSTRACT_FLAG, true);
                 self.set_flag(ZERO_FLAG, result == 0);
@@ -700,7 +726,7 @@ impl Cpu {
     }
 
     fn inc_dec_dd(&mut self, inc:bool, reg_id: u8) -> usize {
-        println!("{:04x}: {} {}", self.regs.pc, if inc {"INC"} else {"DEC"}, DD_NAMES[reg_id as usize]);
+        trace!("{:04x}: {} {}", self.regs.pc, if inc {"INC"} else {"DEC"}, DD_NAMES[reg_id as usize]);
         self.regs.pc += 1;
 
         let result = self.get_reg16_by_id(reg_id) as i32;
@@ -714,15 +740,17 @@ impl Cpu {
     }
 
     fn inc_dec_r(&mut self, inc: bool, reg_id: u8) -> usize {
-        println!("{:04x}: {} {}", self.regs.pc, if inc {"INC"} else {"DEC"}, REG_NAMES[reg_id as usize]);
+        trace!("{:04x}: {} {}", self.regs.pc, if inc {"INC"} else {"DEC"}, REG_NAMES[reg_id as usize]);
         self.regs.pc += 1;
 
-        let result = self.get_reg8_by_id(reg_id) as i16;
+        let mut result = self.get_reg8_by_id(reg_id) as i16;
         if inc {
-            self.set_reg8_by_id(reg_id, (result+1) as u8);
+            result = result + 1;
+            self.set_reg8_by_id(reg_id, result as u8);
             self.set_flag(SUBSTRACT_FLAG, false);
         } else {
-            self.set_reg8_by_id(reg_id, (result-1) as u8);
+            result = result - 1;
+            self.set_reg8_by_id(reg_id, result as u8);
             self.set_flag(SUBSTRACT_FLAG, false);
         }
         self.set_flag(ZERO_FLAG, (result as u8) == 0);
@@ -732,7 +760,7 @@ impl Cpu {
     }
 
     fn ld_r_r(&mut self, dest_reg:u8, src_reg:u8) -> usize {
-        println!("{:04x}: LD {}, {}", self.regs.pc, REG_NAMES[dest_reg as usize], REG_NAMES[src_reg as usize]);
+        trace!("{:04x}: LD {}, {}", self.regs.pc, REG_NAMES[dest_reg as usize], REG_NAMES[src_reg as usize]);
         self.regs.pc += 1;
 
         let value = self.get_reg8_by_id(src_reg);
@@ -743,7 +771,7 @@ impl Cpu {
 
     fn ld_r_n(&mut self, dest_reg: u8) -> usize {
         let value = self.mem.read(self.regs.pc+1);
-        println!("{:04x}: LD {}, ${:02x}", self.regs.pc, REG_NAMES[dest_reg as usize], value);
+        trace!("{:04x}: LD {}, ${:02x}", self.regs.pc, REG_NAMES[dest_reg as usize], value);
         self.regs.pc += 2;
 
         self.set_reg8_by_id(dest_reg, value);
@@ -753,7 +781,7 @@ impl Cpu {
 
     fn ld_a_ind_nn(&mut self) -> usize {
         let address = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
-        println!("{:04x}: LD A, (${:04x})", self.regs.pc, address);
+        trace!("{:04x}: LD A, (${:04x})", self.regs.pc, address);
         self.regs.pc += 3;
 
         self.regs.a = self.mem.read(address);
@@ -770,14 +798,14 @@ impl Cpu {
             _ if instr&0xC0 == 0x40 => self.bit((instr >> 3) & 0x07, instr & 0x07),
             _ if instr&0x80 == 0x80 => self.res_set(instr&0x40 == 0,(instr >> 3) & 0x07, instr & 0x07),
             _ => {
-                println!("\n{:?}", self.regs);
+                trace!("\n{:?}", self.regs);
                 panic!("Uknown prefixed instruction op: 0x{:02x} at addr 0x{:04x}!", instr, self.regs.pc)
             }
         }
     }
 
     fn bc_alu(&mut self, operation: u8, reg_id:u8) -> usize {
-        println!("{:04x}: {} {}", self.regs.pc-1, BCALU_NAMES[operation as usize], REG_NAMES[reg_id as usize]);
+        trace!("{:04x}: {} {}", self.regs.pc-1, BCALU_NAMES[operation as usize], REG_NAMES[reg_id as usize]);
         self.regs.pc += 1;
 
         let mut value = self.get_reg8_by_id(reg_id);
@@ -842,7 +870,7 @@ impl Cpu {
     }
 
     fn bit(&mut self, bit: u8, reg_id: u8) -> usize {
-        println!("{:04x}: BIT {}, {}", self.regs.pc-1, bit, REG_NAMES[reg_id as usize]);
+        trace!("{:04x}: BIT {}, {}", self.regs.pc-1, bit, REG_NAMES[reg_id as usize]);
         self.regs.pc += 1;
 
         let flag = self.get_reg8_by_id(reg_id) & (1<<bit) == 0;
@@ -854,7 +882,7 @@ impl Cpu {
     }
 
     fn res_set(&mut self, res: bool, bit: u8, reg_id: u8) -> usize {
-        println!("{:04x}: {} {}, {}", self.regs.pc-1, if res {"RES"} else {"SET"},
+        trace!("{:04x}: {} {}, {}", self.regs.pc-1, if res {"RES"} else {"SET"},
                                       bit, REG_NAMES[reg_id as usize]);
         self.regs.pc += 1;
 

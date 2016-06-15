@@ -5,3 +5,6 @@ authors = ["Arnaud Taffanel <arnaud@bitcraze.se>"]
 
 [dependencies]
 sdl2 = "0.6.1"
+
+[features]
+trace_cpu=[]

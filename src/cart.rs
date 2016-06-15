@@ -27,7 +27,7 @@ impl Cart {
     // Simple version without mapping. Needs to be enhanced for more complex roms
     pub fn read(&self, address:u16) -> u8 {
         match address {
-            _ if address < 0x8000 => if (address as usize) < self.rom.len() { self.rom[address as usize] } else { 0 },
+            _ if address < 0x8000 => if (address as usize) < self.rom.len() { self.rom[address as usize] } else { 0xff },
             _ => { println!("Warning: Reading outside the rom!"); 0 }
         }
     }

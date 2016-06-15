@@ -45,16 +45,33 @@ fn main() {
 
     println!("Starting execution of bootstrap: ");
     cpu.reset();
+    //cpu.set_pc(0x100);
     emulator_loop(cpu, disp);
 
     println!("Exiting ...");
 }
 
-static BLACK : [u8; 144*160*3] = [0; 144*160*3];
-
 fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display) {
     loop {
         cpu.step();
-        if cpu.cycle >= 1000000 {break;}
+        cpu.mem.video.step(cpu.cycle);
+
+        if cpu.mem.video.image_ready {
+            // Display the picture!
+            disp.render_screen(&cpu.mem.video.screen);
+        }
+
+        if cpu.cycle >= 40000000 {break;}
     }
+
+    println!("PC: {:04X}", cpu.get_pc());
+    dump_vram(&cpu.mem.video.vram);
+}
+
+use std::io::prelude::*;
+use std::fs::File;
+
+fn dump_vram(vram: &[u8]) {
+    let mut f = File::create("vram.bin").unwrap();
+    f.write_all(vram).unwrap();
 }

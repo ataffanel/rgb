@@ -3,29 +3,35 @@
 
 use cart::Cart;
 use video::Video;
+use bootstrap::Bootstrap;
 
 pub struct Mem {
+    bootstrap: Bootstrap,
     cart: Cart,
     work: Vec<u8>,
     hram: Vec<u8>,
+    page0_mode: u8,
     interrupts: u8,
 
     pub video: Video,
 }
 
 impl Mem {
-    pub fn new(cart: Cart) -> Mem {
+    pub fn new(bootstrap: Bootstrap, cart: Cart) -> Mem {
         Mem {
+            bootstrap: bootstrap,
             cart: cart,
             work: vec![0; 8*1024],
             hram: vec![0; 256],
             interrupts: 0,
+            page0_mode: 0,
             video: Video::new(),
         }
     }
 
     pub fn read(&self, address: u16) -> u8 {
         match address {
+            _ if address < 0x0100 && self.page0_mode == 0 => self.bootstrap.read(address),
             _ if address < 0x8000 => self.cart.read(address), // Cart ROM
             _ if address < 0xA000 => self.video.read(address), // VRAM
             _ if address < 0xC000 => self.cart.read(address), // Cart RAM
@@ -33,6 +39,7 @@ impl Mem {
             _ if address < 0xFEA0 => self.video.read(address), // OAM
             _ if address < 0xFF00 => 0, // Not usable, ignored
             _ if address < 0xFF80 => match address {
+                0xff50 => self.page0_mode,
                 _ if address & 0x00f0 == 0x40 => self.video.read(address),
                 _ => 0,
             }, // IO registers
@@ -50,6 +57,7 @@ impl Mem {
             _ if address < 0xFEA0 => self.video.write(address, data), // OAM
             _ if address < 0xFF00 => (), // Not usable, ignored
             _ if address < 0xFF80 => match address {
+                0xff50 if self.page0_mode == 0 => self.page0_mode = data,
                 _ if address & 0x00f0 == 0x40 => self.video.write(address, data),
                 _ => (),
             }, // IO registers

@@ -12,6 +12,7 @@ enum Mode {
 pub struct Video {
     mode: Mode,
     next_event: usize,
+    enabled: bool,
 
     // Video memories
     pub vram: Vec<u8>,
@@ -46,6 +47,11 @@ const MODE1_LINE_CLK: usize = 456;
 const MODE2_CLK: usize = 80;
 const MODE3_CLK: usize = 172;
 
+enum Interrupt {
+    VBlank,
+
+}
+
 const COLOR_MAPPING: &'static [ [u8; 3]; 4 ] = &[[223, 249, 206],
                                                  [127,127,127],
                                                  [64,64,64],
@@ -61,6 +67,7 @@ impl Video {
         Video {
             mode: Mode::Mode1,
             next_event: 0,
+            enabled: false,
             vram: vec![0; 8*1024],
             oam: vec![0; 160],
             registers: vec![0; 16],
@@ -127,8 +134,6 @@ impl Video {
                     MODE0_CLK
                 },
             };
-
-            //println!("VIDEO MODE: {}; VIDEO LINE: {}", self.registers[STAT]&0x03, self.registers[LY]);
         };
         irq
     }
@@ -179,8 +184,6 @@ impl Video {
             let tile_pos = ((bg_y&0xF8)<<2) | ((x>>3)&0x1F);
             let x_in_tile = x&0x07;
 
-            //println!("Tile pos: ${:0x} y_in_tile: {}", tile_pos, y_in_tile);
-
             let color = self.get_tile_pixel(tile_pos, y_in_tile, x_in_tile);
 
             let mut line = &mut self.screen[current_line*LINE_WIDTH*3 .. (current_line+1)*LINE_WIDTH*3];
@@ -198,26 +201,12 @@ impl Video {
 
         if self.registers[LCDC]&0x10 == 0 {
             tile_address = (0x1000 + (((tile_id as i8) as isize)*16)) as usize;
-            if line==0 && tile_id != 0 {
-                ;//println!("Tile POS: {} ID: {}u", tile_pos, tile_id as i8);
-            }
         } else {
             tile_address = 0x0000 + ((tile_id as usize)*16);
-            if line==0 && tile_id != 0 {
-                ;//println!("Tile POS: {} ID: {}i", tile_pos, tile_id as u8);
-            }
         }
 
-        //println!("{:04x}", tile_map_addr + tile_pos);
-
-        // if line == 0 && col == 0 && tile_id != 0 {
-        //     println!("Tile pos: ${:0x} tile_id: {}", tile_pos, tile_id);
-        // }
         let low = self.vram[tile_address+(2*line)] as usize;
         let high = self.vram[tile_address+(2*line)+1] as usize;
-        // if tile_id != 0 {
-        //     println!("{:04X}", tile_address+(2*line));
-        // }
 
         let unmapped = (((high>>(7-col&0x07))&0x01)<<1) | ((low>>(7-col&0x07))&0x01);
 

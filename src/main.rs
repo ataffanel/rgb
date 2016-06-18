@@ -13,14 +13,25 @@ mod cpu;
 mod mem;
 mod video;
 mod display;
+mod bootstrap;
 
 fn main() {
-    if env::args().len() != 2 {
-        println!("Usage: gbc <path_to_rom>");
+    if env::args().len() != 3 {
+        println!("Usage: gbc <path to bootstrap> <path_to_rom>");
         return;
     }
 
-    let rom_path = env::args().last().unwrap();
+    let bootstrap_path = env::args().nth(1).unwrap();
+    println!("Loading bootstrap {:?}", bootstrap_path);
+    let bootstrap = match bootstrap::Bootstrap::load(&bootstrap_path) {
+        Ok(b) => b,
+        Err(err) => {
+            println!("Error reading bootstrap: {}", err.error);
+            return;
+        }
+    };
+
+    let rom_path = env::args().nth(2).unwrap();
 
     println!("Loading rom {:?}", rom_path);
 
@@ -32,7 +43,6 @@ fn main() {
             return;
         },
     }
-
     let cart = cart.unwrap();
 
     // println!("Rom size: {}", cart.rom.len());
@@ -41,7 +51,7 @@ fn main() {
 
     let (disp,sdl) = display::Display::new();
 
-    let mut cpu = cpu::Cpu::new(cart);
+    let mut cpu = cpu::Cpu::new(bootstrap, cart);
 
     println!("Starting execution of bootstrap: ");
     cpu.reset();
@@ -65,6 +75,7 @@ fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display) {
     }
 
     println!("PC: {:04X}", cpu.get_pc());
+    cpu.print_regs();
     dump_vram(&cpu.mem.video.vram);
 }
 

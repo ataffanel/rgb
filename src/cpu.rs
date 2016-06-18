@@ -1,5 +1,6 @@
 // Emulation of the Game Boy LR35902 cpu
 
+use bootstrap::Bootstrap;
 use cart::Cart;
 use mem::Mem;
 
@@ -127,7 +128,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub fn new(cart: Cart) -> Cpu {
+    pub fn new(bootstrap: Bootstrap, cart: Cart) -> Cpu {
         Cpu {
             regs: Regs {
                 a: 0,
@@ -142,7 +143,7 @@ impl Cpu {
                 pc: 0,
                 sp: 0,
             },
-            mem: Mem::new(cart),
+            mem: Mem::new(bootstrap, cart),
             cycle: 0,
             halted: false,
             stoped: false,
@@ -174,6 +175,8 @@ impl Cpu {
     }
 
     pub fn get_cycle(&self) -> usize { self.cycle }
+
+    pub fn print_regs(&self) { println!("{:?}", self.regs); }
 
     // Pivate methods
 
@@ -665,49 +668,49 @@ impl Cpu {
                 result = a + val;
                 self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
                 self.set_flag(SUBSTRACT_FLAG, false);
-                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(ZERO_FLAG, result&0xff == 0);
                 self.set_flag(CARRY_FLAG, result&0x800 != 0);
             },
             ALU_ADC => {
                 result = a + val + (if self.get_flag(CARRY_FLAG) { 1 } else { 0 });
                 self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
                 self.set_flag(SUBSTRACT_FLAG, false);
-                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(ZERO_FLAG, result&0xff == 0);
                 self.set_flag(CARRY_FLAG, result&0x800 != 0);
             },
             ALU_SUB => {
                 result = a + !(val as u8) as u16 + 1;
                 self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
                 self.set_flag(SUBSTRACT_FLAG, true);
-                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(ZERO_FLAG, result&0xff == 0);
                 self.set_flag(CARRY_FLAG, result&0x800 != 0);
             },
             ALU_SBC => {
                 result = a + !(val as u8) as u16 + 1 + (if self.get_flag(CARRY_FLAG) { 0xff } else { 0 });
                 self.set_flag(HALF_CARRY_FLAG, result&0x10 != 0);
                 self.set_flag(SUBSTRACT_FLAG, true);
-                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(ZERO_FLAG, result&0xff == 0);
                 self.set_flag(CARRY_FLAG, result&0x800 != 0);
             },
             ALU_AND => {
                 result = a & val;
                 self.set_flag(HALF_CARRY_FLAG, true);
                 self.set_flag(SUBSTRACT_FLAG, false);
-                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(ZERO_FLAG, result&0xff == 0);
                 self.set_flag(CARRY_FLAG, false);
             },
             ALU_XOR => {
                 result = a ^ val;
                 self.set_flag(HALF_CARRY_FLAG, false);
                 self.set_flag(SUBSTRACT_FLAG, false);
-                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(ZERO_FLAG, result&0xff == 0);
                 self.set_flag(CARRY_FLAG, false);
             },
             ALU_OR => {
                 result = a | val;
                 self.set_flag(HALF_CARRY_FLAG, false);
                 self.set_flag(SUBSTRACT_FLAG, false);
-                self.set_flag(ZERO_FLAG, result == 0);
+                self.set_flag(ZERO_FLAG, result&0xff == 0);
                 self.set_flag(CARRY_FLAG, false);
             },
             ALU_CP => {

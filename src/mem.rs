@@ -8,10 +8,10 @@ use bootstrap::Bootstrap;
 pub struct Mem {
     bootstrap: Bootstrap,
     cart: Cart,
-    work: Vec<u8>,
-    hram: Vec<u8>,
+    pub work: Vec<u8>,
+    pub hram: Vec<u8>,
     page0_mode: u8,
-    interrupts: u8,
+    pub interrupts: u8,
 
     pub video: Video,
 }
@@ -39,6 +39,7 @@ impl Mem {
             _ if address < 0xFEA0 => self.video.read(address), // OAM
             _ if address < 0xFF00 => 0, // Not usable, ignored
             _ if address < 0xFF80 => match address {
+                0xFF0F => (1<<3) as u8,
                 0xff50 => self.page0_mode,
                 _ if address & 0x00f0 == 0x40 => self.video.read(address),
                 _ => 0,
@@ -57,12 +58,16 @@ impl Mem {
             _ if address < 0xFEA0 => self.video.write(address, data), // OAM
             _ if address < 0xFF00 => (), // Not usable, ignored
             _ if address < 0xFF80 => match address {
+                0xFF01 => print!("\x1b[1;34m{}\x1b[0m", (data as char).to_string()),
                 0xff50 if self.page0_mode == 0 => self.page0_mode = data,
                 _ if address & 0x00f0 == 0x40 => self.video.write(address, data),
                 _ => (),
             }, // IO registers
             _ if address < 0xFFFF => self.hram[(address&0xFF) as usize] = data,
-            _ => self.interrupts = data, //0xFFFF !
+            _ => {
+                //println!("Writing interrupt enabled to {:02x}", data);
+                self.interrupts = data //0xFFFF !
+            },
         }
     }
 }

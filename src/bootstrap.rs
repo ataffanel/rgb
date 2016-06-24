@@ -23,6 +23,12 @@ impl Bootstrap {
         })
     }
 
+    pub fn create_from_slice(slice: &[u8]) -> Bootstrap {
+        Bootstrap {
+            bootstrap: slice.to_vec(),
+        }
+    }
+
     pub fn read(&self, address: u16) -> u8 {
         return self.bootstrap[address as usize]
     }

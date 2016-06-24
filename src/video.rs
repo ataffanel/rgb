@@ -163,7 +163,7 @@ impl Video {
                 //Mode::Mode2 | Mode::Mode3 => (),
                 _ => self.oam[(address & 0xff) as usize] = data,
             },
-            0xff46 => panic!("This is DMA :-("),
+            //0xff46 => panic!("This is DMA :-("),
             _ if address & 0x00f0 == 0x40 => self.registers[(address&0x000f) as usize] = data,
             _ => panic!("Address decoding bug: ${:04x} is not in video space.", address)
         }

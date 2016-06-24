@@ -7,9 +7,14 @@ use std::env;
 // use cart::Cart;
 
 extern crate sdl2;
+use sdl2::Sdl;
+use sdl2::event::Event;
+//use sdl2::event::Event::*;
+use sdl2::keyboard::Keycode;
 
 mod cart;
 mod cpu;
+//mod instructions;
 mod mem;
 mod video;
 mod display;
@@ -56,13 +61,13 @@ fn main() {
     println!("Starting execution of bootstrap: ");
     cpu.reset();
     //cpu.set_pc(0x100);
-    emulator_loop(cpu, disp);
+    emulator_loop(cpu, disp, sdl);
 
     println!("Exiting ...");
 }
 
-fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display) {
-    loop {
+fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, mut sdl: Sdl) {
+    'outer: loop {
         cpu.step();
         cpu.mem.video.step(cpu.cycle);
 
@@ -70,19 +75,36 @@ fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display) {
             // Display the picture!
             disp.render_screen(&cpu.mem.video.screen);
         }
+        while let Some(ev) = sdl.event_pump().poll_event() {
+            match ev {
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'outer,
+                Event::Quit { .. } => break 'outer,
+                _ => {}
+            }
+        }
 
-        if cpu.cycle >= 40000000 {break;}
+        //if cpu.cycle >= 40000000 {break;}//40000000 {break;}
     }
 
     println!("PC: {:04X}", cpu.get_pc());
     cpu.print_regs();
-    dump_vram(&cpu.mem.video.vram);
+    println!("Interrupts: {:04X}", cpu.mem.interrupts);
+    dump_ram("vram.bin", &cpu.mem.video.vram);
+    dump_ram("workram.bin", &cpu.mem.work);
+    dump_memory_space("memory_space.bin", &cpu.mem);
 }
 
 use std::io::prelude::*;
 use std::fs::File;
 
-fn dump_vram(vram: &[u8]) {
-    let mut f = File::create("vram.bin").unwrap();
+fn dump_ram(filename: &str, vram: &[u8]) {
+    let mut f = File::create(filename).unwrap();
     f.write_all(vram).unwrap();
+}
+
+fn dump_memory_space(filename: &str, mem: &mem::Mem) {
+    let mut f = File::create(filename).unwrap();
+    for addr in 0 .. 65536 {
+        f.write(&[mem.read(addr as u16)]).unwrap();
+    }
 }

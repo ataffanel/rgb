@@ -318,7 +318,7 @@ impl Cpu {
         trace!("{:04x}: HALT", self.regs.pc);
         self.halted = true;
         self.regs.pc += 1;
-        panic!("Halt not implemented!");
+        //panic!("Halt not implemented!");
         4
     }
 
@@ -327,7 +327,7 @@ impl Cpu {
         trace!("{:04x}: STOP", self.regs.pc);
         self.stoped = true;
         self.regs.pc += 1;
-        panic!("STOP not implemented!");
+        //panic!("STOP not implemented!");
         4
     }
 
@@ -456,11 +456,12 @@ impl Cpu {
     }
 
     fn ld_ind_a16_sp(&mut self) -> usize {
-        let value = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
-        trace!("{:04x}: LD (${:04x}), SP", self.regs.pc, value);
+        let addr = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
+        trace!("{:04x}: LD (${:04x}), SP", self.regs.pc, addr);
         self.regs.pc += 3;
 
-        self.regs.sp = value;
+        self.mem.write(addr, (self.regs.sp&0xff) as u8);
+        self.mem.write(addr.wrapping_add(1), (self.regs.sp>>8) as u8);
 
         20
     }
@@ -563,13 +564,13 @@ impl Cpu {
             } else {
                 *reg_l = self.mem.read(self.regs.sp);
             }
-            *reg_h = self.mem.read(self.regs.sp+1);
-            self.regs.sp += 2;
+            *reg_h = self.mem.read(self.regs.sp.wrapping_add(1));
+            self.regs.sp = self.regs.sp.wrapping_add(2);
             trace!("{:04x}: POP {}", self.regs.pc, reg_name);
         } else {
-            self.mem.write(self.regs.sp-1, *reg_h);
-            self.mem.write(self.regs.sp-2, *reg_l);
-            self.regs.sp -= 2;
+            self.mem.write(self.regs.sp.wrapping_sub(1), *reg_h);
+            self.mem.write(self.regs.sp.wrapping_sub(2), *reg_l);
+            self.regs.sp = self.regs.sp.wrapping_sub(2);
             trace!("{:04x}: PUSH {}", self.regs.pc, reg_name);
         }
 
@@ -589,7 +590,7 @@ impl Cpu {
         let c = self.get_flag(CARRY_FLAG);
         let n = self.get_flag(SUBSTRACT_FLAG);
 
-        let mut diff: u8 = if low < 10 && high < 10 && !h && !c {
+        let diff: u8 = if low < 10 && high < 10 && !h && !c {
             0
         } else if (low < 10 && high < 10 && h && !c) ||
                   (low > 9 && high < 9 && !c) {

@@ -375,12 +375,11 @@ impl Cpu {
 
     fn rst(&mut self, address: u8) -> usize {
         trace!("{:04x}: RST ${:02x}", self.regs.pc, address);
+        self.regs.pc += 1;
         self.mem.write(self.regs.sp-1, (self.regs.pc>>8) as u8);
         self.mem.write(self.regs.sp-2, self.regs.pc as u8);
         self.regs.sp -= 2;
         self.regs.pc = address as u16;
-
-        if address == 0x38 {panic!("RST 38!");}
 
         16
     }

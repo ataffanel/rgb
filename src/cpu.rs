@@ -290,7 +290,7 @@ impl Cpu {
             _ if instr&0xC7 == 0x03 => self.inc_dec_dd(instr&0x08==0, (instr>>4)&0x03),
             _ if instr&0xC6 == 0x04 => self.inc_dec_r(instr&0x01==0, (instr>>3)&0x07),
             _ if instr&0xED == 0xE0 => self.ldh(instr&0x02==0, instr&0x10==0),
-            _ if instr&0xED == 0xC4 => self.call(true, (instr>>3)&0x03),
+            _ if instr&0xC7 == 0xC4 => self.call(true, (instr>>3)&0x03),
             _ if instr&0xE7 == 0xC0 => self.ret(true, (instr>>3)&0x03),
             _ if instr&0xCF == 0xC1 => self.push_pop_qq(true, (instr>>4)&0x03),
             _ if instr&0xCF == 0xC5 => self.push_pop_qq(false, (instr>>4)&0x03),
@@ -533,22 +533,6 @@ impl Cpu {
         }
     }
 
-    fn ld_hl_sp_r8(&mut self) -> usize {
-        let value = self.mem.read(self.regs.pc+1) as i8;
-        trace!("{:04x}: LD HL, SP{:+}", self.regs.pc, value);
-        self.regs.pc += 2;
-
-        let result = self.regs.sp as i32 + value as i32;
-        self.set_reg16_by_id(HL_REGID, result as u16);
-
-        self.set_flag(ZERO_FLAG, false);
-        self.set_flag(SUBSTRACT_FLAG, false);
-        self.set_flag(HALF_CARRY_FLAG, result&0x100 != 0); // Is that right?
-        self.set_flag(CARRY_FLAG, result&0x10000 != 0);
-
-        12
-    }
-
     fn push_pop_qq(&mut self, pop: bool, reg_id: u8) -> usize {
         let (reg_h, reg_l, reg_name) = match reg_id {
             0 => (&mut self.regs.b, &mut self.regs.c, "BC"),
@@ -664,22 +648,41 @@ impl Cpu {
     }
 
     fn add_sp_r8(&mut self) -> usize {
-        let value = self.mem.read(self.regs.pc+1) as i8;
+        let value = ((self.mem.read(self.regs.pc+1) as i8) as i16) as u16;
         trace!("{:04x}: ADD SP, {}", self.regs.pc, value);
         self.regs.pc += 2;
 
-        let result = self.regs.sp as i32 + value as i32;
+        let result = self.regs.sp.wrapping_add(value);
+        let hresult = (self.regs.sp&0xff) + (value&0xff);
+        let hhresult = (self.regs.sp&0x0f) + (value&0x0f);
         self.regs.sp = result as u16;
 
         self.set_flag(ZERO_FLAG, false);
         self.set_flag(SUBSTRACT_FLAG, false);
-        self.set_flag(HALF_CARRY_FLAG, result&0x100 != 0); // Is that right?
-        self.set_flag(CARRY_FLAG, result&0x10000 != 0);
+        self.set_flag(HALF_CARRY_FLAG, hhresult&0x10 != 0);
+        self.set_flag(CARRY_FLAG, hresult&0x100 != 0);
 
         16
     }
 
+    fn ld_hl_sp_r8(&mut self) -> usize {
+        let ivalue = (self.mem.read(self.regs.pc+1) as i8) as i16;
+        let value = ivalue as u16;
+        trace!("{:04x}: LD HL, SP{:+}", self.regs.pc, ivalue);
+        self.regs.pc += 2;
 
+        let result = self.regs.sp.wrapping_add(value);
+        let hresult = (self.regs.sp&0xff) + (value&0xff);
+        let hhresult = (self.regs.sp&0x0f) + (value&0x0f);
+        self.set_reg16_by_id(HL_REGID, result as u16);
+
+        self.set_flag(ZERO_FLAG, false);
+        self.set_flag(SUBSTRACT_FLAG, false);
+        self.set_flag(HALF_CARRY_FLAG, hhresult&0x10 != 0);
+        self.set_flag(CARRY_FLAG, hresult&0x100 != 0);
+
+        12
+    }
 
     fn add_hl_ss(&mut self, reg_id: u8) -> usize {
         trace!("{:04x}: ADD HL, {}", self.regs.pc, DD_NAMES[reg_id as usize]);

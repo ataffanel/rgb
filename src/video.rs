@@ -52,10 +52,15 @@ enum Interrupt {
 
 }
 
-const COLOR_MAPPING: &'static [ [u8; 3]; 4 ] = &[[223, 249, 206],
-                                                 [127,127,127],
-                                                 [64,64,64],
-                                                 [0,0,0],];
+// const COLOR_MAPPING: &'static [ [u8; 3]; 4 ] = &[[223, 249, 206],
+//                                                  [127,127,127],
+//                                                  [64,64,64],
+//                                                  [0,0,0],];
+const COLOR_MAPPING: &'static [ [u8; 3]; 4 ] = &[[149, 176, 29],
+                                                 [108, 136, 41],
+                                                 [58, 100, 60],
+                                                 [29, 62, 30],];
+
 const LINE_WIDTH: usize = 160;
 
 fn get_shade(palette: u8, color: u8) -> u8 {

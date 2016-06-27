@@ -167,7 +167,41 @@ impl Cpu {
     }
 
     pub fn step(&mut self) {
-        self.cycle += self.decode();
+        if self.interrupts_enabled && (self.mem.reg_ie&self.mem.reg_if) != 0 {
+            let int = self.mem.reg_ie&self.mem.reg_if;
+
+            if int&IRQ_VBLANK != 0 {
+                self.interrupt(0x40);
+                self.mem.reg_if &= !IRQ_VBLANK;
+            }
+            if int&IRQ_LCDSTAT != 0 {
+                self.interrupt(0x48);
+                self.mem.reg_if &= !IRQ_LCDSTAT;
+            }
+            if int&IRQ_TIMER != 0 {
+                self.interrupt(0x50);
+                self.mem.reg_if &= !IRQ_TIMER;
+            }
+            if int&IRQ_SERIAL != 0 {
+                self.interrupt(0x58);
+                self.mem.reg_if &= !IRQ_SERIAL;
+            }
+            if int&IRQ_JOYPAD != 0 {
+                self.interrupt(0x60);
+                self.mem.reg_if &= !IRQ_JOYPAD;
+            }
+
+            self.stoped = false;
+            self.halted = false;
+
+            self.cycle += 5*4;
+        } else if !self.stoped && !self.halted {
+            self.cycle += self.decode();
+        } else {
+            trace!("{}", if self.stoped {"Stopped!"} else {"Halted!"});
+            self.cycle += 4;
+        }
+
         trace!("{:?}", self.regs);
     }
 
@@ -180,6 +214,16 @@ impl Cpu {
     pub fn print_regs(&self) { println!("{:?}", self.regs); }
 
     // Pivate methods
+
+    fn interrupt(&mut self, address: u8) {
+        trace!("{:04x}: INTERRUPT ${:02x}", self.regs.pc, address);
+
+        self.mem.write(self.regs.sp-1, (self.regs.pc>>8) as u8);
+        self.mem.write(self.regs.sp-2, self.regs.pc as u8);
+        self.regs.sp -= 2;
+
+        self.regs.pc = address as u16;
+    }
 
     fn set_flag(&mut self, flag: u8, value: bool) {
         if value {
@@ -295,7 +339,7 @@ impl Cpu {
             _ if instr&0xCF == 0xC1 => self.push_pop_qq(true, (instr>>4)&0x03),
             _ if instr&0xCF == 0xC5 => self.push_pop_qq(false, (instr>>4)&0x03),
             _ if instr&0xE7 == 0x07 => self.rotate((instr>>3)&0x03),
-            _ if instr&0xF3 == 0xF3 => self.dei(instr&0x80 != 0),
+            _ if instr&0xF7 == 0xF3 => self.dei(instr&0x08 != 0),
             _ if instr&0xCF == 0x09 => self.add_hl_ss((instr&0x30)>>4),
             _ => {
                 trace!("\n{:?}", self.regs);

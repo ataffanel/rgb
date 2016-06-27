@@ -167,7 +167,12 @@ impl Cpu {
     }
 
     pub fn step(&mut self) {
-        if self.interrupts_enabled && (self.mem.reg_ie&self.mem.reg_if) != 0 {
+        if (self.mem.reg_ie & self.mem.reg_if) != 0 {
+            self.stoped = false;
+            self.halted = false;
+        }
+
+        if self.interrupts_enabled && (self.mem.reg_ie & self.mem.reg_if) != 0 {
             let int = self.mem.reg_ie&self.mem.reg_if;
 
             if int&IRQ_VBLANK != 0 {
@@ -190,9 +195,6 @@ impl Cpu {
                 self.interrupt(0x60);
                 self.mem.reg_if &= !IRQ_JOYPAD;
             }
-
-            self.stoped = false;
-            self.halted = false;
 
             self.cycle += 5*4;
         } else if !self.stoped && !self.halted {

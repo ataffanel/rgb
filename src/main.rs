@@ -14,12 +14,12 @@ use sdl2::keyboard::Keycode;
 
 mod cart;
 mod cpu;
-//mod instructions;
 mod mem;
 mod video;
 mod display;
 mod bootstrap;
 mod joypad;
+mod timer;
 
 fn main() {
     if env::args().len() != 3 {
@@ -66,8 +66,8 @@ fn main() {
 fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, mut sdl: Sdl) {
     'outer: loop {
         cpu.step();
-        cpu.mem.video.step(cpu.cycle);
-
+        cpu.mem.reg_if |= cpu.mem.timer.step(cpu.cycle);
+        cpu.mem.reg_if |= cpu.mem.video.step(cpu.cycle);
         cpu.mem.joypad.step();
 
         if cpu.mem.video.image_ready {
@@ -87,7 +87,8 @@ fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, mut sdl: Sdl) {
 
     println!("PC: {:04X}", cpu.get_pc());
     cpu.print_regs();
-    println!("Interrupts: {:04X}", cpu.mem.reg_ie);
+    println!("IE: {:04X}", cpu.mem.reg_ie);
+    println!("IF: {:04X}", cpu.mem.reg_if);
     dump_ram("vram.bin", &cpu.mem.video.vram);
     dump_ram("workram.bin", &cpu.mem.work);
     dump_memory_space("memory_space.bin", &cpu.mem);

@@ -5,6 +5,7 @@ use cart::Cart;
 use video::Video;
 use bootstrap::Bootstrap;
 use joypad::Joypad;
+use timer::Timer;
 
 pub struct Mem {
     bootstrap: Bootstrap,
@@ -17,6 +18,7 @@ pub struct Mem {
 
     pub video: Video,
     pub joypad: Joypad,
+    pub timer: Timer,
 }
 
 impl Mem {
@@ -31,6 +33,7 @@ impl Mem {
             page0_mode: 0,
             video: Video::new(),
             joypad: Joypad::new(),
+            timer: Timer::new(),
         }
     }
 
@@ -47,6 +50,7 @@ impl Mem {
                 0xFF00 => self.joypad.read(address),
                 0xFF0F => self.reg_if,
                 0xff50 => self.page0_mode,
+                _ if address & 0x00fc == 0x04 => self.timer.read(address),
                 _ if address & 0x00f0 == 0x40 => self.video.read(address),
                 _ => 0xff,
             }, // IO registers
@@ -69,6 +73,7 @@ impl Mem {
                 0xFF01 => print!("\x1b[1;34m{}\x1b[0m", (data as char).to_string()),
                 0xFF0F => self.reg_if = data,
                 0xff50 if self.page0_mode == 0 => self.page0_mode = data,
+                _ if address & 0x00fc == 0x04 => self.timer.write(address, data),
                 _ if address & 0x00f0 == 0x40 => self.video.write(address, data),
                 _ => (),
             }, // IO registers

@@ -19,6 +19,7 @@ mod mem;
 mod video;
 mod display;
 mod bootstrap;
+mod joypad;
 
 fn main() {
     if env::args().len() != 3 {
@@ -50,10 +51,6 @@ fn main() {
     }
     let cart = cart.unwrap();
 
-    // println!("Rom size: {}", cart.rom.len());
-    // println!("First byte {:x}", cart.read(0));
-    // println!("First byte {:x}", cart.read(0x8000));
-
     let (disp,sdl) = display::Display::new();
 
     let mut cpu = cpu::Cpu::new(bootstrap, cart);
@@ -71,6 +68,8 @@ fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, mut sdl: Sdl) {
         cpu.step();
         cpu.mem.video.step(cpu.cycle);
 
+        cpu.mem.joypad.step();
+
         if cpu.mem.video.image_ready {
             // Display the picture!
             disp.render_screen(&cpu.mem.video.screen);
@@ -78,17 +77,17 @@ fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, mut sdl: Sdl) {
         while let Some(ev) = sdl.event_pump().poll_event() {
             match ev {
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'outer,
+                Event::KeyDown { keycode: Some(Keycode::Return), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Start, true),
+                Event::KeyUp { keycode: Some(Keycode::Return), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Start, false),
                 Event::Quit { .. } => break 'outer,
                 _ => {}
             }
         }
-
-        //if cpu.cycle >= 40000000 {break;}//40000000 {break;}
     }
 
     println!("PC: {:04X}", cpu.get_pc());
     cpu.print_regs();
-    println!("Interrupts: {:04X}", cpu.mem.interrupts);
+    println!("Interrupts: {:04X}", cpu.mem.reg_ie);
     dump_ram("vram.bin", &cpu.mem.video.vram);
     dump_ram("workram.bin", &cpu.mem.work);
     dump_memory_space("memory_space.bin", &cpu.mem);

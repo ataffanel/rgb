@@ -4,6 +4,7 @@
 use cart::Cart;
 use video::Video;
 use bootstrap::Bootstrap;
+use joypad::Joypad;
 
 pub struct Mem {
     bootstrap: Bootstrap,
@@ -11,9 +12,11 @@ pub struct Mem {
     pub work: Vec<u8>,
     pub hram: Vec<u8>,
     page0_mode: u8,
-    pub interrupts: u8,
+    pub reg_ie: u8,
+    pub reg_if: u8,
 
     pub video: Video,
+    pub joypad: Joypad,
 }
 
 impl Mem {
@@ -23,9 +26,11 @@ impl Mem {
             cart: cart,
             work: vec![0; 8*1024],
             hram: vec![0; 256],
-            interrupts: 0,
+            reg_ie: 0,
+            reg_if: 0,
             page0_mode: 0,
             video: Video::new(),
+            joypad: Joypad::new(),
         }
     }
 
@@ -39,13 +44,15 @@ impl Mem {
             _ if address < 0xFEA0 => self.video.read(address), // OAM
             _ if address < 0xFF00 => 0, // Not usable, ignored
             _ if address < 0xFF80 => match address {
-                0xFF0F => (1<<3) as u8,
+                0xFF00 => self.joypad.read(address),
+                0xFF0F => self.reg_if,
                 0xff50 => self.page0_mode,
                 _ if address & 0x00f0 == 0x40 => self.video.read(address),
-                _ => 0,
+                _ => 0xff,
             }, // IO registers
             _ if address < 0xFFFF => self.hram[(address&0xFF) as usize],
-            _ => self.interrupts, //0xFFFF !
+            0xffff => self.reg_ie,
+            _ => panic!("Read address decoding bug"),
         }
     }
 
@@ -58,16 +65,16 @@ impl Mem {
             _ if address < 0xFEA0 => self.video.write(address, data), // OAM
             _ if address < 0xFF00 => (), // Not usable, ignored
             _ if address < 0xFF80 => match address {
+                0xFF00 => self.joypad.write(address, data),
                 0xFF01 => print!("\x1b[1;34m{}\x1b[0m", (data as char).to_string()),
+                0xFF0F => self.reg_if = data,
                 0xff50 if self.page0_mode == 0 => self.page0_mode = data,
                 _ if address & 0x00f0 == 0x40 => self.video.write(address, data),
                 _ => (),
             }, // IO registers
             _ if address < 0xFFFF => self.hram[(address&0xFF) as usize] = data,
-            _ => {
-                //println!("Writing interrupt enabled to {:02x}", data);
-                self.interrupts = data //0xFFFF !
-            },
+            0xffff => self.reg_ie = data,
+            _ => panic!("Write address decoding bug"),
         }
     }
 }

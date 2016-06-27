@@ -910,7 +910,7 @@ impl Cpu {
         self.set_flag(ZERO_FLAG, (result as u8) == 0);
 
 
-        4
+        if reg_id == IND_HL_REGID { 12 } else { 4 }
     }
 
     fn ld_r_r(&mut self, dest_reg:u8, src_reg:u8) -> usize {
@@ -1049,7 +1049,7 @@ impl Cpu {
         self.set_flag(HALF_CARRY_FLAG, true);
         self.set_flag(SUBSTRACT_FLAG, false);
 
-        if reg_id == IND_HL_REGID {12} else {4}
+        if reg_id == IND_HL_REGID {8} else {4}
     }
 
     fn res_set(&mut self, res: bool, bit: u8, reg_id: u8) -> usize {

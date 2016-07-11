@@ -371,7 +371,7 @@ impl Cpu {
     #[allow(unreachable_code)]
     fn stop(&mut self) -> usize {
         trace!("{:04x}: STOP", self.regs.pc);
-        self.stoped = true;
+        //self.stoped = true;
         self.regs.pc += 1;
         //panic!("STOP not implemented!");
         4
@@ -748,7 +748,7 @@ impl Cpu {
 
     fn cp_d8(&mut self) -> usize {
         let value = self.mem.read(self.regs.pc+1);
-        trace!("{:04x}: CP ${}", self.regs.pc, value);
+        trace!("{:04x}: CP ${:02x}", self.regs.pc, value);
         self.regs.pc += 2;
 
         let a = self.regs.a;

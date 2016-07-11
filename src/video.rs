@@ -140,6 +140,10 @@ impl Video {
                 },
             };
         };
+
+        if self.registers[STAT] & (1<<6) != 0 && self.registers[LYC] == self.registers[LY] {
+            irq |= cpu::IRQ_LCDSTAT;
+        }
         irq
     }
 

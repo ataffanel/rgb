@@ -1,14 +1,14 @@
 
 // bit position in state variables
-const STATE_DOWN: u8 = 1;
-const STATE_UP: u8 = 2;
-const STATE_LEFT: u8 = 4;
-const STATE_RIGH: u8 = 8;
+const STATE_RIGH: u8 = 1;
+const STATE_LEFT: u8 = 2;
+const STATE_UP: u8 = 4;
+const STATE_DOWN: u8 = 8;
 
-const STATE_START: u8 = 16;
-const STATE_SELECT: u8 = 32;
-const STATE_A: u8 = 64;
-const STATE_B: u8 = 128;
+const STATE_A: u8 = 16;
+const STATE_B: u8 = 32;
+const STATE_SELECT: u8 = 64;
+const STATE_START: u8 = 128;
 
 pub enum JoypadButton {
     Down,
@@ -38,7 +38,7 @@ impl Joypad {
 
     // Memory access
     pub fn read(&self, address: u16) -> u8 { self.reg }
-    pub fn write(&mut self, address: u16, data: u8) { self.reg = (self.reg&0xCF) | data; }
+    pub fn write(&mut self, address: u16, data: u8) { self.reg = (self.reg&0xCF) | (data&0x30); }
 
     //emulator loop access
     pub fn set_button(&mut self, button: JoypadButton, pressed: bool) {

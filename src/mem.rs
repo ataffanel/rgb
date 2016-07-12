@@ -92,8 +92,6 @@ impl Mem {
 
     pub fn step(&mut self) {
         if let Some(oam_dma_source) = self.oam_dma_source {
-            println!("DMA transfert from ${:04X}", oam_dma_source);
-
             for i in 0u16..0xA0 {
                 let data = self.read(oam_dma_source + i);
                 self.write(0xFE00 + i, data);

@@ -193,7 +193,11 @@ impl Video {
             let tile_pos = ((bg_y&0xF8)<<2) | ((x>>3)&0x1F);
             let x_in_tile = x&0x07;
 
-            let color = self.get_tile_pixel(tile_pos, y_in_tile, x_in_tile);
+            let mut color = self.get_bg_tile_pixel(tile_pos, y_in_tile, x_in_tile);
+
+            if let Some(c) = self.get_sprite_pixel(color, i, current_line) {
+                color = c;
+            }
 
             let mut line = &mut self.screen[current_line*LINE_WIDTH*3 .. (current_line+1)*LINE_WIDTH*3];
             let pixel = &mut line[i*3 .. (i+1)*3];
@@ -203,7 +207,7 @@ impl Video {
         }
     }
 
-    fn get_tile_pixel(&mut self, tile_pos: usize, line: usize, col: usize) -> usize {
+    fn get_bg_tile_pixel(&mut self, tile_pos: usize, line: usize, col: usize) -> usize {
         let tile_map_addr: usize = if self.registers[LCDC]&0x08==0 {0x1800} else {0x1c00};
         let tile_id = self.vram[tile_map_addr + tile_pos] as u8;
         let tile_address;
@@ -220,5 +224,20 @@ impl Video {
         let unmapped = (((high>>(7-col&0x07))&0x01)<<1) | ((low>>(7-col&0x07))&0x01);
 
         ((self.registers[BGP] as usize) >> (unmapped*2))&0x03
+    }
+
+    fn get_sprite_pixel(&self, bg_color: usize, x: usize, y: usize) -> Option<usize> {
+        let mut color = None;
+        for i in 0..40 {
+            let attributes = &self.oam[i*4..(i+1)*4];
+            if ((x as u8) >= attributes[1].wrapping_sub(8) && (x as u8) < attributes[1].wrapping_sub(0)) &&
+               ((y as u8) >= attributes[0].wrapping_sub(16) && (y as u8) < attributes[0].wrapping_sub(8)) {
+                   if attributes[2] != 0 {
+                       color = Some(2);
+                       break;
+                   }
+               }
+        }
+        color
     }
 }

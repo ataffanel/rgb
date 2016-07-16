@@ -98,13 +98,15 @@ impl Video {
                         self.mode = Mode::Mode2;
                         self.registers[STAT] |= 0x02;
 
+                        if self.registers[STAT] & (1<<5) != 0 {
+                            irq |= cpu::IRQ_LCDSTAT;
+                        }
+
                         MODE2_CLK
                     } else { // Switch to VBLANK
                         self.mode = Mode::Mode1;
                         self.registers[STAT] |= 0x01;
                         self.image_ready = true;
-
-                        //println!("SCY: {}", self.registers[SCY]);
 
                         irq |= cpu::IRQ_VBLANK;
                         if self.registers[STAT] & (1<<4) != 0 {
@@ -121,6 +123,10 @@ impl Video {
                         self.mode = Mode::Mode2;
                         self.registers[STAT] |= 0x02;
 
+                        if self.registers[STAT] & (1<<5) != 0 {
+                            irq |= cpu::IRQ_LCDSTAT;
+                        }
+
                         MODE2_CLK
                     } else {
                         self.registers[STAT] |= 0x01;
@@ -136,6 +142,11 @@ impl Video {
                     self.render_line();
                     self.mode = Mode::Mode0;
                     self.registers[STAT] |= 0x00;
+
+                    if self.registers[STAT] & (1<<3) != 0 {
+                        irq |= cpu::IRQ_LCDSTAT;
+                    }
+
                     MODE0_CLK
                 },
             };
@@ -172,7 +183,6 @@ impl Video {
                 //Mode::Mode2 | Mode::Mode3 => (),
                 _ => self.oam[(address & 0xff) as usize] = data,
             },
-            //0xff46 => panic!("This is DMA :-("),
             _ if address & 0x00f0 == 0x40 => self.registers[(address&0x000f) as usize] = data,
             _ => panic!("Address decoding bug: ${:04x} is not in video space.", address)
         }
@@ -232,10 +242,8 @@ impl Video {
             let attributes = &self.oam[i*4..(i+1)*4];
             if ((x as u8) >= attributes[1].wrapping_sub(8) && (x as u8) < attributes[1].wrapping_sub(0)) &&
                ((y as u8) >= attributes[0].wrapping_sub(16) && (y as u8) < attributes[0].wrapping_sub(8)) {
-                   if attributes[2] != 0 {
-                       color = Some(2);
-                       break;
-                   }
+                   color = Some(2);
+                   break;
                }
         }
         color

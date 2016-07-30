@@ -51,6 +51,8 @@ fn main() {
     }
     let cart = cart.unwrap();
 
+    println!("Loaded cartridge:\n{}", cart);
+
     let (disp,sdl) = display::Display::new();
 
     let mut cpu = cpu::Cpu::new(bootstrap, cart);

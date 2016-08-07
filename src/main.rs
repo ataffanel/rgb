@@ -76,26 +76,27 @@ fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, mut sdl: Sdl) {
         if cpu.mem.video.image_ready {
             // Display the picture!
             disp.render_screen(&cpu.mem.video.screen);
-        }
-        while let Some(ev) = sdl.event_pump().poll_event() {
-            match ev {
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'outer,
-                Event::KeyDown { keycode: Some(Keycode::Return), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Start, true),
-                Event::KeyDown { keycode: Some(Keycode::Up), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Up, true),
-                Event::KeyDown { keycode: Some(Keycode::Down), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Down, true),
-                Event::KeyDown { keycode: Some(Keycode::Left), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Left, true),
-                Event::KeyDown { keycode: Some(Keycode::Right), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Right, true),
-                Event::KeyDown { keycode: Some(Keycode::S), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::A, true),
-                Event::KeyDown { keycode: Some(Keycode::A), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::B, true),
-                Event::KeyUp { keycode: Some(Keycode::Return), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Start, false),
-                Event::KeyUp { keycode: Some(Keycode::Up), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Up, false),
-                Event::KeyUp { keycode: Some(Keycode::Down), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Down, false),
-                Event::KeyUp { keycode: Some(Keycode::Left), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Left, false),
-                Event::KeyUp { keycode: Some(Keycode::Right), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Right, false),
-                Event::KeyUp { keycode: Some(Keycode::S), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::A, false),
-                Event::KeyUp { keycode: Some(Keycode::A), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::B, false),
-                Event::Quit { .. } => break 'outer,
-                _ => {}
+
+            while let Some(ev) = sdl.event_pump().poll_event() {
+                match ev {
+                    Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'outer,
+                    Event::KeyDown { keycode: Some(Keycode::Return), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Start, true),
+                    Event::KeyDown { keycode: Some(Keycode::Up), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Up, true),
+                    Event::KeyDown { keycode: Some(Keycode::Down), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Down, true),
+                    Event::KeyDown { keycode: Some(Keycode::Left), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Left, true),
+                    Event::KeyDown { keycode: Some(Keycode::Right), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Right, true),
+                    Event::KeyDown { keycode: Some(Keycode::S), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::A, true),
+                    Event::KeyDown { keycode: Some(Keycode::A), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::B, true),
+                    Event::KeyUp { keycode: Some(Keycode::Return), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Start, false),
+                    Event::KeyUp { keycode: Some(Keycode::Up), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Up, false),
+                    Event::KeyUp { keycode: Some(Keycode::Down), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Down, false),
+                    Event::KeyUp { keycode: Some(Keycode::Left), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Left, false),
+                    Event::KeyUp { keycode: Some(Keycode::Right), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Right, false),
+                    Event::KeyUp { keycode: Some(Keycode::S), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::A, false),
+                    Event::KeyUp { keycode: Some(Keycode::A), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::B, false),
+                    Event::Quit { .. } => break 'outer,
+                    _ => {}
+                }
             }
         }
     }

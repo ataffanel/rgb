@@ -9,6 +9,12 @@ enum Mode {
     Mode3,
 }
 
+#[derive(Copy,Clone)]
+struct Pixel {
+    color: usize,
+    pallette: usize,
+}
+
 pub struct Video {
     mode: Mode,
     next_event: usize,
@@ -192,9 +198,23 @@ impl Video {
     fn render_line(&mut self) {
         let current_line = self.registers[LY] as usize;
         if current_line>143 { panic!("render_line should not be called during VBLANK!"); }
+        let mut line_pixels  = [Pixel { color:0, pallette:0 }; LINE_WIDTH];
 
-        // Drawing background
-        //let bg_pos = ((current_line+(self.registers[SCY] as usize))*256) + self.registers[SCX] as usize;
+        self.draw_background(&mut line_pixels);
+        self.draw_sprites(&mut line_pixels);
+
+        let mut line = &mut self.screen[current_line*LINE_WIDTH*3 .. (current_line+1)*LINE_WIDTH*3];
+        let mut i = 0;
+        for pixel in line_pixels.into_iter() {
+            line[(3*i)+0]= self.color_map[pixel.color][2];
+            line[(3*i)+1]= self.color_map[pixel.color][1];
+            line[(3*i)+2]= self.color_map[pixel.color][0];
+            i += 1;
+        }
+    }
+
+    fn draw_background(&mut self, line_pixels: &mut [Pixel]) {
+        let current_line = self.registers[LY] as usize;
         let bg_x = self.registers[SCX] as usize;
         let bg_y = (current_line+(self.registers[SCY] as usize))&0xff;
         let y_in_tile = bg_y&0x07;
@@ -203,17 +223,7 @@ impl Video {
             let tile_pos = ((bg_y&0xF8)<<2) | ((x>>3)&0x1F);
             let x_in_tile = x&0x07;
 
-            let mut color = self.get_bg_tile_pixel(tile_pos, y_in_tile, x_in_tile);
-
-            if let Some(c) = self.get_sprite_pixel(color, i, current_line) {
-                color = c;
-            }
-
-            let mut line = &mut self.screen[current_line*LINE_WIDTH*3 .. (current_line+1)*LINE_WIDTH*3];
-            let pixel = &mut line[i*3 .. (i+1)*3];
-            pixel[0] = self.color_map[color][2];
-            pixel[1] = self.color_map[color][1];
-            pixel[2] = self.color_map[color][0];
+            line_pixels[i].color = self.get_bg_tile_pixel(tile_pos, y_in_tile, x_in_tile);;
         }
     }
 
@@ -236,16 +246,30 @@ impl Video {
         ((self.registers[BGP] as usize) >> (unmapped*2))&0x03
     }
 
-    fn get_sprite_pixel(&self, bg_color: usize, x: usize, y: usize) -> Option<usize> {
-        let mut color = None;
+    fn draw_sprites(&mut self, line_pixels: &mut [Pixel]) {
+        let ly = self.registers[LY] as usize;
+
         for i in 0..40 {
-            let attributes = &self.oam[i*4..(i+1)*4];
-            if ((x as u8) >= attributes[1].wrapping_sub(8) && (x as u8) < attributes[1].wrapping_sub(0)) &&
-               ((y as u8) >= attributes[0].wrapping_sub(16) && (y as u8) < attributes[0].wrapping_sub(8)) {
-                   color = Some(2);
-                   break;
-               }
+            let attribute = &self.oam[i*4..(i+1)*4];
+            if (ly as u8) >= attribute[0].wrapping_sub(16) && (ly as u8) < attribute[0].wrapping_sub(8) {
+                // Decoding sprite attribute
+                let above_bg = attribute[3]&0x80 == 0;
+                let pallette = if attribute[3]&0x10 == 0 { 1 } else { 2 };
+                let x_flip = attribute[3]&(1<<5) != 0;
+                let y_flip = attribute[3]&(1<<6) != 0;
+
+                // Plotting sprite
+                let start = if attribute[1]<8 { 0 } else { attribute[1].wrapping_sub(8) };
+                for x in start..attribute[1] {
+                    let x = x as usize;
+                    if x<LINE_WIDTH {
+                        if line_pixels[x].pallette == 0 && above_bg || line_pixels[x].color == 0 {
+                            line_pixels[x].color = 2;
+                            line_pixels[x].pallette = pallette;
+                        }
+                    }
+                }
+            }
         }
-        color
     }
 }

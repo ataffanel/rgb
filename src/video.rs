@@ -11,6 +11,7 @@ enum Mode {
 
 #[derive(Copy,Clone,PartialEq)]
 enum Palette {
+    BLANK,
     BGP,
     OBP0,
     OBP1,
@@ -205,15 +206,23 @@ impl Video {
     fn render_line(&mut self) {
         let current_line = self.registers[LY] as usize;
         if current_line>143 { panic!("render_line should not be called during VBLANK!"); }
-        let mut line_pixels  = [Pixel { color:0, palette:Palette::BGP }; LINE_WIDTH];
+        let mut line_pixels  = [Pixel { color:0, palette:Palette::BLANK }; LINE_WIDTH];
 
-        self.draw_background(&mut line_pixels);
-        self.draw_sprites(&mut line_pixels);
+        if self.registers[LCDC]&(1<<0) != 0 {
+            self.draw_background(&mut line_pixels);
+        }
+        if self.registers[LCDC]&(1<<5) != 0 {
+            self.draw_window(&mut line_pixels);
+        }
+        if self.registers[LCDC]&(1<<1) != 0 {
+            self.draw_sprites(&mut line_pixels);
+        }
 
         let mut line = &mut self.screen[current_line*LINE_WIDTH*3 .. (current_line+1)*LINE_WIDTH*3];
         let mut i = 0;
         for pixel in line_pixels.into_iter() {
             let color = match pixel.palette {
+                Palette::BLANK => 0,
                 Palette::BGP => ((self.registers[BGP] as usize) >> (pixel.color*2))&0x03,
                 Palette::OBP0 => ((self.registers[OBP0] as usize) >> (pixel.color*2))&0x03,
                 Palette::OBP1 => ((self.registers[OBP1] as usize) >> (pixel.color*2))&0x03,
@@ -238,6 +247,31 @@ impl Video {
 
             line_pixels[i].color = self.get_bg_tile_pixel(tile_pos, y_in_tile, x_in_tile);
             line_pixels[i].palette = Palette::BGP;
+        }
+    }
+
+    fn draw_window(&mut self, line_pixels: &mut [Pixel]) {
+        let current_line = self.registers[LY] as isize;
+        let x_in_window = (self.registers[WX] as isize) - 7;
+        let y_in_window = current_line - (self.registers[WY] as isize);
+
+        if y_in_window >= 0 && y_in_window < 144 {
+            for x in 0..LINE_WIDTH {
+                let x_in_window = x_in_window + (x as isize);
+                if x_in_window >= 0 && x_in_window < (LINE_WIDTH as isize) {
+                    let (wx, wy) = (x_in_window as usize, y_in_window as usize);
+                    let tile_pos = ((wy&0xF8)<<2) | ((wx>>3)&0x1F);
+                    let tile_col = wx & 0x07;
+                    let tile_line = wy & 0x07;
+
+                    let tile_map_addr: usize = if self.registers[LCDC]&(1<<6)==0 {0x1800} else {0x1c00};
+                    let tile_id = self.vram[tile_map_addr + tile_pos] as u8;
+
+                    line_pixels[x].palette = Palette::BGP;
+                    line_pixels[x].color = Video::get_tile_color(&self.vram, self.registers[LCDC]&(1<<6)!=0,
+                                                                tile_id, tile_col, tile_line);
+                }
+            }
         }
     }
 
@@ -289,21 +323,23 @@ impl Video {
                 let y_flip = attribute[3]&(1<<6) != 0;
 
                 // Plotting sprite
-                let start = if attribute[1]<8 { 0 } else { attribute[1].wrapping_sub(8) };
+                let (start, col) = if attribute[1]<8 { (0, 8-attribute[1]) } else { (attribute[1].wrapping_sub(8), 0) };
+                let mut col = col as usize;
                 for x in start..attribute[1] {
                     let x = x as usize;
                     let start = start as usize;
                     if x<LINE_WIDTH {
                         if line_pixels[x].palette == Palette::BGP && above_bg || line_pixels[x].color == 0 {
-                            let mut col = x-start;
                             let mut line = ly-(attribute[0].wrapping_sub(16) as usize);
-                            if x_flip { col = 7 - col; }
+                            let mut rcol = col;
+                            if x_flip { rcol = 7 - col; }
                             if y_flip { line = 7 - line; }
-                            let color = Video::get_tile_color(&self.vram, false, attribute[2], col, line);
+                            let color = Video::get_tile_color(&self.vram, false, attribute[2], rcol, line);
                             if color != 0 {
                                 line_pixels[x].color = color;
                                 line_pixels[x].palette = pallette;
                             }
+                            col += 1;
                         }
                     }
                 }

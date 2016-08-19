@@ -2,9 +2,9 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use std::env;
-
-// use cart::Cart;
+#[macro_use]
+extern crate clap;
+use clap::App;
 
 extern crate sdl2;
 use sdl2::Sdl;
@@ -22,26 +22,35 @@ mod joypad;
 mod timer;
 
 fn main() {
-    if env::args().len() != 3 {
-        println!("Usage: gbc <path to bootstrap> <path_to_rom>");
-        return;
+    let matches = App::new("rgb")
+                          .version(crate_version!())
+                          .author(crate_authors!())
+                          .about("Gameboy emulator")
+                          .args_from_usage(
+                              "-b, --bootstrap=[bootstrap] 'Custom bootstrap rom'
+                              <ROM>              'Gamboy rom to run'")
+                          .get_matches();
+
+    let bootstrap;
+    if let Some(bootstrap_path) = matches.value_of("bootstrap") {
+        println!("Loading bootstrap {:?}", bootstrap_path);
+        bootstrap = match bootstrap::Bootstrap::load(&bootstrap_path.to_string()) {
+            Ok(b) => b,
+            Err(err) => {
+                println!("Error reading bootstrap: {}", err.error);
+                return;
+            }
+        };
+    } else {
+        panic!("Integrated bootstrap not implemented yet. Please set one.")
     }
 
-    let bootstrap_path = env::args().nth(1).unwrap();
-    println!("Loading bootstrap {:?}", bootstrap_path);
-    let bootstrap = match bootstrap::Bootstrap::load(&bootstrap_path) {
-        Ok(b) => b,
-        Err(err) => {
-            println!("Error reading bootstrap: {}", err.error);
-            return;
-        }
-    };
 
-    let rom_path = env::args().nth(2).unwrap();
+    let rom_path = matches.value_of("ROM").unwrap();
 
     println!("Loading rom {:?}", rom_path);
 
-    let cart = cart::Cart::load(&rom_path);
+    let cart = cart::Cart::load(&rom_path.to_string());
     match cart {
         Ok(_) => (),
         Err(err) => {

@@ -3,7 +3,8 @@
 // handle more specifically displaying the screen using SDL2
 use sdl2::pixels::PixelFormatEnum::BGR24;
 use sdl2::render::{Renderer, Texture, TextureAccess};
-use sdl2::{InitBuilder, Sdl};
+use sdl2::Sdl;
+use sdl2;
 
 /// Emulated screen width in pixels
 const SCREEN_WIDTH: usize = 160;
@@ -20,9 +21,12 @@ pub struct Display<'a> {
 
 impl<'a> Display<'a> {
     pub fn new() -> (Display<'a>, Sdl) {
-        let sdl = InitBuilder::new().video().audio().timer().events().unwrap();
+        let sdl = sdl2::init().unwrap();
+        let video = sdl.video().unwrap();
+        sdl.event().unwrap();
+        sdl.timer().unwrap();
 
-        let mut window_builder = sdl.window("rgb",
+        let mut window_builder = video.window("rgb",
                                             (SCREEN_WIDTH as usize) as u32,
                                             (SCREEN_HEIGHT as usize) as u32);
         let window = window_builder.position_centered().build().unwrap();
@@ -30,7 +34,7 @@ impl<'a> Display<'a> {
         let renderer = window.renderer().accelerated().present_vsync().build().unwrap();
         let texture = renderer.create_texture(BGR24,
                                               TextureAccess::Streaming,
-                                              (SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32))
+                                              SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32)
                                               .unwrap();
         (Display {
             renderer: Box::new(renderer),

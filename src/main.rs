@@ -11,6 +11,8 @@ use sdl2::Sdl;
 use sdl2::event::Event;
 //use sdl2::event::Event::*;
 use sdl2::keyboard::Keycode;
+//use sdl2::joystick::JoystickSubsystem;
+use sdl2::controller::Button;
 
 mod cart;
 mod cpu;
@@ -64,6 +66,8 @@ fn main() {
 
     let (disp,sdl) = display::Display::new();
 
+    let gamepad = sdl.game_controller().unwrap().open(0);
+
     let mut cpu = cpu::Cpu::new(bootstrap, cart);
 
     println!("Starting execution of bootstrap: ");
@@ -74,7 +78,7 @@ fn main() {
     println!("Exiting ...");
 }
 
-fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, mut sdl: Sdl) {
+fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, sdl: Sdl) {
     'outer: loop {
         cpu.step();
         cpu.mem.step();
@@ -86,25 +90,17 @@ fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, mut sdl: Sdl) {
             // Display the picture!
             disp.render_screen(&cpu.mem.video.screen);
 
-            while let Some(ev) = sdl.event_pump().poll_event() {
+            while let Some(ev) = sdl.event_pump().unwrap().poll_event() {
                 match ev {
                     Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'outer,
-                    Event::KeyDown { keycode: Some(Keycode::Return), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Start, true),
-                    Event::KeyDown { keycode: Some(Keycode::Up), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Up, true),
-                    Event::KeyDown { keycode: Some(Keycode::Down), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Down, true),
-                    Event::KeyDown { keycode: Some(Keycode::Left), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Left, true),
-                    Event::KeyDown { keycode: Some(Keycode::Right), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Right, true),
-                    Event::KeyDown { keycode: Some(Keycode::S), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::A, true),
-                    Event::KeyDown { keycode: Some(Keycode::A), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::B, true),
-                    Event::KeyUp { keycode: Some(Keycode::Return), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Start, false),
-                    Event::KeyUp { keycode: Some(Keycode::Up), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Up, false),
-                    Event::KeyUp { keycode: Some(Keycode::Down), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Down, false),
-                    Event::KeyUp { keycode: Some(Keycode::Left), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Left, false),
-                    Event::KeyUp { keycode: Some(Keycode::Right), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::Right, false),
-                    Event::KeyUp { keycode: Some(Keycode::S), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::A, false),
-                    Event::KeyUp { keycode: Some(Keycode::A), .. } => cpu.mem.joypad.set_button(joypad::JoypadButton::B, false),
                     Event::Quit { .. } => break 'outer,
                     _ => {}
+                }
+                if let Some((button, pressed)) = decode_keyboard(&ev) {
+                    cpu.mem.joypad.set_button(button, pressed);
+                }
+                if let Some((button, pressed)) = decode_gamecontroller(&ev) {
+                    cpu.mem.joypad.set_button(button, pressed);
                 }
             }
         }
@@ -131,5 +127,49 @@ fn dump_memory_space(filename: &str, mem: &mem::Mem) {
     let mut f = File::create(filename).unwrap();
     for addr in 0 .. 65536 {
         f.write(&[mem.read(addr as u16)]).unwrap();
+    }
+}
+
+fn decode_keyboard(ev: &Event) -> Option<(joypad::JoypadButton, bool)> {
+    return match *ev {
+        Event::KeyDown { keycode: Some(Keycode::Return), .. } => Some((joypad::JoypadButton::Start, true)),
+        Event::KeyDown { keycode: Some(Keycode::Up), .. } => Some((joypad::JoypadButton::Up, true)),
+        Event::KeyDown { keycode: Some(Keycode::Down), .. } => Some((joypad::JoypadButton::Down, true)),
+        Event::KeyDown { keycode: Some(Keycode::Left), .. } => Some((joypad::JoypadButton::Left, true)),
+        Event::KeyDown { keycode: Some(Keycode::Right), .. } => Some((joypad::JoypadButton::Right, true)),
+        Event::KeyDown { keycode: Some(Keycode::S), .. } => Some((joypad::JoypadButton::A, true)),
+        Event::KeyDown { keycode: Some(Keycode::A), .. } => Some((joypad::JoypadButton::B, true)),
+        Event::KeyUp { keycode: Some(Keycode::Return), .. } => Some((joypad::JoypadButton::Start, false)),
+        Event::KeyUp { keycode: Some(Keycode::Up), .. } => Some((joypad::JoypadButton::Up, false)),
+        Event::KeyUp { keycode: Some(Keycode::Down), .. } => Some((joypad::JoypadButton::Down, false)),
+        Event::KeyUp { keycode: Some(Keycode::Left), .. } => Some((joypad::JoypadButton::Left, false)),
+        Event::KeyUp { keycode: Some(Keycode::Right), .. } => Some((joypad::JoypadButton::Right, false)),
+        Event::KeyUp { keycode: Some(Keycode::S), .. } => Some((joypad::JoypadButton::A, false)),
+        Event::KeyUp { keycode: Some(Keycode::A), .. } => Some((joypad::JoypadButton::B, false)),
+        _ => None
+    }
+}
+
+fn decode_gamecontroller(ev: &Event) -> Option<(joypad::JoypadButton, bool)> {
+    return match *ev {
+        Event::ControllerButtonDown { button: Button::Start, .. } => Some((joypad::JoypadButton::Start, true)),
+        Event::ControllerButtonUp { button: Button::Start, .. } => Some((joypad::JoypadButton::Start, false)),
+        Event::ControllerButtonDown { button: Button::Back, .. } => Some((joypad::JoypadButton::Select, true)),
+        Event::ControllerButtonUp { button: Button::Back, .. } => Some((joypad::JoypadButton::Select, false)),
+
+        Event::ControllerButtonDown { button: Button::A, .. } => Some((joypad::JoypadButton::B, true)),
+        Event::ControllerButtonUp { button: Button::A, .. } => Some((joypad::JoypadButton::B, false)),
+        Event::ControllerButtonDown { button: Button::B, .. } => Some((joypad::JoypadButton::A, true)),
+        Event::ControllerButtonUp { button: Button::B, .. } => Some((joypad::JoypadButton::A, false)),
+
+        Event::ControllerButtonDown { button: Button::DPadUp, .. } => Some((joypad::JoypadButton::Up, true)),
+        Event::ControllerButtonUp { button: Button::DPadUp, .. } => Some((joypad::JoypadButton::Up, false)),
+        Event::ControllerButtonDown { button: Button::DPadDown, .. } => Some((joypad::JoypadButton::Down, true)),
+        Event::ControllerButtonUp { button: Button::DPadDown, .. } => Some((joypad::JoypadButton::Down, false)),
+        Event::ControllerButtonDown { button: Button::DPadLeft, .. } => Some((joypad::JoypadButton::Left, true)),
+        Event::ControllerButtonUp { button: Button::DPadLeft, .. } => Some((joypad::JoypadButton::Left, false)),
+        Event::ControllerButtonDown { button: Button::DPadRight, .. } => Some((joypad::JoypadButton::Right, true)),
+        Event::ControllerButtonUp { button: Button::DPadRight, .. } => Some((joypad::JoypadButton::Right, false)),
+        _ => None,
     }
 }

@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Arnaud Taffanel <arnaud@bitcraze.se>"]
 
 [dependencies]
-sdl2 = "0.22.0"
+sdl2 = "0.29.0"
 clap = "2"
 
 [features]

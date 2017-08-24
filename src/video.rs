@@ -312,10 +312,11 @@ impl Video {
 
     fn draw_sprites(&mut self, line_pixels: &mut [Pixel]) {
         let ly = self.registers[LY] as usize;
+        let height = if self.registers[LCDC]&(1<<2) == 0 { 8 } else { 16 };
 
         for i in 0..40 {
             let attribute = &self.oam[i*4..(i+1)*4];
-            if (ly as u8) >= attribute[0].wrapping_sub(16) && (ly as u8) < attribute[0].wrapping_sub(8) {
+            if (ly as u8) >= attribute[0].wrapping_sub(16) && (ly as u8) < attribute[0].wrapping_sub(16-height) {
                 // Decoding sprite attribute
                 let above_bg = attribute[3]&0x80 == 0;
                 let pallette = if attribute[3]&0x10 == 0 { Palette::OBP0 } else { Palette::OBP1 };
@@ -333,7 +334,7 @@ impl Video {
                             let mut line = ly-(attribute[0].wrapping_sub(16) as usize);
                             let mut rcol = col;
                             if x_flip { rcol = 7 - col; }
-                            if y_flip { line = 7 - line; }
+                            if y_flip { line = height as usize - 1 - line; }
                             let color = Video::get_tile_color(&self.vram, false, attribute[2], rcol, line);
                             if color != 0 {
                                 line_pixels[x].color = color;

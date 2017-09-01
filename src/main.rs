@@ -30,6 +30,7 @@ fn main() {
                           .about("Gameboy emulator")
                           .args_from_usage(
                               "-b, --bootstrap=[bootstrap] 'Custom bootstrap rom'
+                              -s, --save=[save]  'Use a cartrige ram save file'
                               <ROM>              'Gamboy rom to run'")
                           .get_matches();
 
@@ -52,11 +53,16 @@ fn main() {
 
     println!("Loading rom {:?}", rom_path);
 
-    let cart = cart::Cart::load(&rom_path.to_string());
+    let ram_path = matches.value_of("save");
+    if let Some(path) = ram_path {
+        println!("Using save file {:?}", path);
+    }
+
+    let cart = cart::Cart::load(&rom_path.to_string(), ram_path.map(|s| s.to_string()).as_ref());
     match cart {
         Ok(_) => (),
         Err(err) => {
-            println!("Error reading rom: {}", err.error);
+            println!("Error reading rom or save: {}", err.error);
             return;
         },
     }
@@ -73,12 +79,17 @@ fn main() {
     println!("Starting execution of bootstrap: ");
     cpu.reset();
     //cpu.set_pc(0x100);
-    emulator_loop(cpu, disp, sdl);
+    emulator_loop(&mut cpu, disp, sdl);
+
+    if let Some(path) = ram_path {
+        println!("Writing back cart ram to {:?}", path);
+        dump_ram(path, &cpu.mem.cart.ram);
+    }
 
     println!("Exiting ...");
 }
 
-fn emulator_loop(mut cpu: cpu::Cpu, mut disp: display::Display, sdl: Sdl) {
+fn emulator_loop(mut cpu: &mut cpu::Cpu, mut disp: display::Display, sdl: Sdl) {
     'outer: loop {
         cpu.step();
         cpu.mem.step();

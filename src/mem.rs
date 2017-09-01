@@ -9,7 +9,7 @@ use timer::Timer;
 
 pub struct Mem {
     bootstrap: Bootstrap,
-    cart: Cart,
+    pub cart: Cart,
     pub work: Vec<u8>,
     pub hram: Vec<u8>,
     page0_mode: u8,

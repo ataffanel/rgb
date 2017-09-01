@@ -40,17 +40,26 @@ pub enum Type {
 }
 
 impl Cart {
-    pub fn load(rom_path: &String) -> Result<Cart, CartLoadError> {
+    pub fn load(rom_path: &String, ram_save: Option<&String>) -> Result<Cart, CartLoadError> {
         let mut f = try!(File::open(rom_path));
         let mut buffer = Vec::new();
-
         try!(f.read_to_end(&mut buffer));
 
-        Ok(Cart::init(buffer))
+        let ram_buffer;
+        if let Some(ram_filename) = ram_save {
+            let mut fr = try!(File::open(ram_filename));
+            let mut buffer = Vec::new();
+            try!(fr.read_to_end(&mut buffer));
+            ram_buffer = Some(buffer);
+        } else {
+            ram_buffer = None;
+        }
+
+        Cart::init(buffer, ram_buffer)
     }
 
     pub fn create_from_slice(slice: &[u8]) -> Cart {
-        Cart::init(slice.to_vec())
+        Cart::init(slice.to_vec(), None).unwrap()
     }
 
     pub fn read(&self, address:u16) -> u8 {
@@ -102,7 +111,7 @@ impl Cart {
     }
 
     // Private functions
-    fn init(buffer: Vec<u8>) -> Cart {
+    fn init(buffer: Vec<u8>, ram_buffer: Option<Vec<u8>>) -> Result<Cart, CartLoadError> {
 
         // (mbc, has_ram, has_battery, has_timer, has_rumble, type_str)
         let decoded_type = match buffer[0x147] {
@@ -150,16 +159,23 @@ impl Cart {
                 3 => 32*1024,
                 _ => 0,
             };
-            ram = vec![0;ram_size];
+
         } else if let Type::MBC2 = decoded_type.0 {
-            ram = vec![0;512];
             ram_size = 512;
         } else {
-            ram = Vec::new();
             ram_size = 0;
         }
 
-        Cart {
+        if let Some(ram_buffer) = ram_buffer {
+            if ram_buffer.len() != ram_size {
+                return Err(CartLoadError::from("Ram save file has wrong size."));
+            }
+            ram = ram_buffer;
+        } else {
+            ram = vec![0;ram_size];
+        }
+
+        Ok(Cart {
             rom: buffer,
             ram: ram,
 
@@ -171,7 +187,7 @@ impl Cart {
             ram_size: ram_size,
 
             type_str: decoded_type.5,
-        }
+        })
     }
 
 }
@@ -187,6 +203,14 @@ impl fmt::Display for Cart {
 
 impl From<io::Error> for CartLoadError {
     fn from(err: io::Error) -> CartLoadError {
+        CartLoadError {
+            error: format!("{:?}", err)
+        }
+    }
+}
+
+impl From<&'static str> for CartLoadError {
+    fn from(err: &'static str) -> CartLoadError {
         CartLoadError {
             error: format!("{:?}", err)
         }

@@ -55,7 +55,7 @@ impl Mem {
                 0xFF0F => self.reg_if,
                 0xff50 => self.page0_mode,
                 0xff46 => 0,
-                0xff4d => 0x00,
+                0xff4d => 0xff,
                 _ if address & 0x00fc == 0x04 => self.timer.read(address),
                 _ if address & 0x00f0 == 0x40 => self.video.read(address),
                 _ => 0xff,

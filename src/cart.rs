@@ -10,10 +10,12 @@ pub struct Cart {
 
     // Cart config
     has_mapper: bool,
+    mapper_type: Type,
     ram_size: usize,
     type_str: &'static str,
 
     // Cart runtime state
+    ram_enable: bool,
     ram_banking_mode: bool,
     rom_bank: usize,
     ram_bank: usize,
@@ -77,36 +79,55 @@ impl Cart {
 
     // Implements MBC1 mapper only for now
     pub fn write(&mut self, address:u16, data:u8) {
-        let ram_offset = self.ram_bank * 0x2000;
-        if self.has_mapper {
-            match address {
-                _ if address < 0x2000 => (), //Enable ram
-                _ if address < 0x4000 => self.rom_bank = /*(self.rom_bank & !0x1f) |*/ if data==0 {1} else {(data&0x1f) as usize},
-                // _ if address < 0x6000 => {
-                //     if self.ram_banking_mode {
-                //         self.ram_bank = data as usize;
-                //         println!("Setting ram bank to {}", self.ram_bank);
-                //     } else {
-                //         self.rom_bank = (self.rom_bank&0x1F) | (((data&0x03) as usize)<<5);
-                //         println!("{:04x} Setting ROM bank high bits to {}, rom bank is now {}", address, data&0x02, self.rom_bank);
-                //     }
-                // }
-                // _ if address < 0x8000 => {
-                //     println!("{:04x} Setting bank mode to {} {}", address, data, if (data&0x01)==0 {"ROM"} else {"RAM"});
-                //     if (data&0x01) == 0 {
-                //         self.rom_bank = (self.rom_bank&0x1F) | (self.ram_bank<<5);
-                //         self.ram_bank = 0;
-                //         self.ram_banking_mode = false;
-                //     } else {
-                //         self.rom_bank &= 0x1f;
-                //         self.ram_banking_mode = true;
-                //     }
-                // }
-                _ if address >= 0xA000 && address < 0xC000 => {
-                        if self.ram_size != 0 {self.ram[ram_offset + ((address&0x1fff) as usize)] = data}
+
+
+        match address {
+            _ if address < 0x8000 => self.write_mbc(address, data),
+            _ if address >= 0xA000 && address < 0xC000 => self.write_ram(address, data),
+            _ => { println!("Writing in cart addr {:04x} data {:02x}", address, data); },
+        }
+    }
+
+    fn write_mbc(&mut self, address: u16, data: u8) {
+
+        match self.mapper_type {
+            Type::ROM => (),
+            Type::MBC1 => {
+                match address & 0x6000 {
+                    0x0000 => self.ram_enable = if data&0x0f == 0x0a {true} else {false},
+                    0x2000 => {
+                        self.rom_bank = (if data==0 {1} else {self.rom_bank} & 0x60) | (data&0x1f) as usize
                     }
-                _ => { println!("Writing in cart addr {:04x} data {:02x}", address, data); },
+                    0x4000 => {
+                        if self.ram_banking_mode {
+                            self.ram_bank = (data & 0x03) as usize;
+                        } else {
+                            self.rom_bank = (self.rom_bank & 0x1f) | ((data & 0x03)<<5) as usize;
+                        }
+                    }
+                    0x6000 => {
+                        if (data & 0x01) == 0 {
+                            self.ram_banking_mode = false;
+                            self.rom_bank = (self.rom_bank & 0x1f) | (self.ram_bank << 5);
+                            self.ram_bank = 0;
+                        } else {
+                            self.ram_banking_mode = true;
+                            self.ram_bank = (self.rom_bank & 0x60) >> 5;
+                            self.rom_bank = self.rom_bank & 0x1f;
+                        }
+                    },
+                    _ => (),
+                }
             }
+            _ => panic!("Cart mapper type not supported: {}", self.type_str),
+        }
+    }
+
+    fn write_ram(&mut self, address: u16, data: u8) {
+        let ram_offset = self.ram_bank * 0x2000;
+
+        if self.ram_size != 0 && self.ram_enable {
+            self.ram[ram_offset + ((address&0x1fff) as usize)] = data
         }
     }
 
@@ -115,7 +136,7 @@ impl Cart {
 
         // (mbc, has_ram, has_battery, has_timer, has_rumble, type_str)
         let decoded_type = match buffer[0x147] {
-            0x00 => (Type::ROM,    false, false, false, false, "ROM ONLY "),
+            0x00 => (Type::ROM,    false, false, false, false, "ROM ONLY"),
             0x01 => (Type::MBC1,   false, false, false, false, "MBC1"),
             0x02 => (Type::MBC1,   true , false, false, false, "MBC1+RAM"),
             0x03 => (Type::MBC1,   true , true , false, false, "MBC1+RAM+BATTERY"),
@@ -180,7 +201,9 @@ impl Cart {
             ram: ram,
 
             has_mapper: has_mapper,
+            mapper_type: decoded_type.0,
             ram_banking_mode: false,
+            ram_enable: false,
             rom_bank: 1,
             ram_bank: 0,
 

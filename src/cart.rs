@@ -119,6 +119,15 @@ impl Cart {
                     _ => (),
                 }
             }
+            Type::MBC5 => {
+                match address & 0x7000 {
+                    0x0000...0x1000 => self.ram_enable = if data&0x0f == 0x0a {true} else {false},
+                    0x2000 => self.rom_bank = (self.rom_bank & 0x100) | data as usize,
+                    0x3000 => self.rom_bank = (self.rom_bank & 0x0FF) | (((data & 0x01) as usize) << 8),
+                    0x4000...0x5000 => self.ram_bank = (data & 0x0f) as usize,
+                    _ => (),
+                }
+            }
             _ => panic!("Cart mapper type not supported: {}", self.type_str),
         }
     }

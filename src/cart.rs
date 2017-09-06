@@ -13,6 +13,8 @@ pub struct Cart {
     mapper_type: Type,
     ram_size: usize,
     type_str: &'static str,
+    ram_data_mask: u8,
+    ram_addr_mask: u16,
 
     // Cart runtime state
     ram_enable: bool,
@@ -119,6 +121,13 @@ impl Cart {
                     _ => (),
                 }
             }
+            Type::MBC2 => {
+                self.ram_enable = true;
+                match address & 0x6000 {
+                    0x2000 => self.rom_bank = (data & 0x0F) as usize,
+                    _ => (),
+                }
+            }
             Type::MBC5 => {
                 match address & 0x7000 {
                     0x0000...0x1000 => self.ram_enable = if data&0x0f == 0x0a {true} else {false},
@@ -136,7 +145,7 @@ impl Cart {
         let ram_offset = self.ram_bank * 0x2000;
 
         if self.ram_size != 0 && self.ram_enable {
-            self.ram[ram_offset + ((address&0x1fff) as usize)] = data
+            self.ram[ram_offset + (((address&self.ram_addr_mask)&0x1fff) as usize)] = data & self.ram_data_mask;
         }
     }
 
@@ -182,6 +191,8 @@ impl Cart {
 
         let ram;
         let ram_size;
+        let ram_data_mask;
+        let ram_addr_mask;
         if has_ram {
             ram_size = match buffer[0x149] {
                 1 => 2*1024,
@@ -189,11 +200,16 @@ impl Cart {
                 3 => 32*1024,
                 _ => 0,
             };
-
+            ram_data_mask = 0xff;
+            ram_addr_mask = (ram_size - 1) as u16;
         } else if let Type::MBC2 = decoded_type.0 {
             ram_size = 512;
+            ram_addr_mask = 0x01ff;
+            ram_data_mask = 0x0F;
         } else {
             ram_size = 0;
+            ram_addr_mask = 0x0;
+            ram_data_mask = 0x0;
         }
 
         if let Some(ram_buffer) = ram_buffer {
@@ -217,6 +233,8 @@ impl Cart {
             ram_bank: 0,
 
             ram_size: ram_size,
+            ram_data_mask: ram_data_mask,
+            ram_addr_mask: ram_addr_mask,
 
             type_str: decoded_type.5,
         })

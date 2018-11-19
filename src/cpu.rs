@@ -1,8 +1,8 @@
 // Emulation of the Game Boy LR35902 cpu
 
-use bootstrap::Bootstrap;
-use cart::Cart;
-use mem::Mem;
+use crate::bootstrap::Bootstrap;
+use crate::cart::Cart;
+use crate::mem::Mem;
 
 use std::fmt;
 
@@ -1074,8 +1074,8 @@ mod tests {
     use super::Cpu;
     use super::Regs;
     //use mem::Mem;
-    use bootstrap::Bootstrap;
-    use cart::Cart;
+    use crate::bootstrap::Bootstrap;
+    use crate::cart::Cart;
 
     fn test_cpu(instructions: &[u8], nstep: usize, expected: Regs) -> Cpu {
         // Create an empty bootstrap and put the test code in the cart

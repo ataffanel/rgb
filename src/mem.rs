@@ -1,11 +1,11 @@
 // Implements the memory multiplexer, the fast ram and the work ram.
 // This is a gameboy for now, not a gameboy color, so no banking of the work ram
 
-use cart::Cart;
-use video::Video;
-use bootstrap::Bootstrap;
-use joypad::Joypad;
-use timer::Timer;
+use crate::cart::Cart;
+use crate::video::Video;
+use crate::bootstrap::Bootstrap;
+use crate::joypad::Joypad;
+use crate::timer::Timer;
 
 pub struct Mem {
     bootstrap: Bootstrap,

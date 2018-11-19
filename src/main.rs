@@ -90,7 +90,7 @@ fn main() {
     println!("Exiting ...");
 }
 
-fn emulator_loop(mut cpu: &mut cpu::Cpu, mut disp: display::Display, sdl: Sdl) {
+fn emulator_loop(cpu: &mut cpu::Cpu, mut disp: display::Display, sdl: Sdl) {
     'outer: loop {
         cpu.step();
         cpu.mem.step();

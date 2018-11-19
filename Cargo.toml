@@ -2,6 +2,7 @@
 name = "rgb"
 version = "0.1.0"
 authors = ["Arnaud Taffanel <arnaud@bitcraze.se>"]
+# edition="2018"
 
 [dependencies]
 sdl2 = "0.29.0"

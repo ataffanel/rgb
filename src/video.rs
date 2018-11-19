@@ -1,6 +1,6 @@
 // Gameboy video implementation
 
-use cpu;
+use crate::cpu;
 
 enum Mode {
     Mode0,
@@ -218,7 +218,7 @@ impl Video {
             self.draw_sprites(&mut line_pixels);
         }
 
-        let mut line = &mut self.screen[current_line*LINE_WIDTH*3 .. (current_line+1)*LINE_WIDTH*3];
+        let line = &mut self.screen[current_line*LINE_WIDTH*3 .. (current_line+1)*LINE_WIDTH*3];
         let mut i = 0;
         for pixel in line_pixels.into_iter() {
             let color = match pixel.palette {

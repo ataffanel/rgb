@@ -45,7 +45,7 @@ impl<'a> Display<'a> {
     pub fn render_screen(&mut self, screen_buffer: &[u8]) {
         self.texture.update(None, screen_buffer, SCREEN_WIDTH * 3).unwrap();
         self.renderer.clear();
-        self.renderer.copy(&self.texture, None, None);
+        self.renderer.copy(&self.texture, None, None).expect("Display I/O error");
         self.renderer.present();
     }
 

@@ -45,15 +45,15 @@ pub enum Type {
 
 impl Cart {
     pub fn load(rom_path: &String, ram_save: Option<&String>) -> Result<Cart, CartLoadError> {
-        let mut f = try!(File::open(rom_path));
+        let mut f = r#try!(File::open(rom_path));
         let mut buffer = Vec::new();
-        try!(f.read_to_end(&mut buffer));
+        r#try!(f.read_to_end(&mut buffer));
 
         let ram_buffer;
         if let Some(ram_filename) = ram_save {
-            let mut fr = try!(File::open(ram_filename));
+            let mut fr = r#try!(File::open(ram_filename));
             let mut buffer = Vec::new();
-            try!(fr.read_to_end(&mut buffer));
+            r#try!(fr.read_to_end(&mut buffer));
             ram_buffer = Some(buffer);
         } else {
             ram_buffer = None;

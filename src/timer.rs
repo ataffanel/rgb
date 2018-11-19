@@ -1,4 +1,4 @@
-use cpu;
+use crate::cpu;
 
 pub struct Timer {
     div_full: u16,

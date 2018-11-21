@@ -6,10 +6,3 @@ pub mod bootstrap;
 pub mod joypad;
 pub mod timer;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}

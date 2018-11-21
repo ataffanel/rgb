@@ -1,5 +1,8 @@
 // Gameboy video implementation
 
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 use crate::cpu;
 
 enum Mode {

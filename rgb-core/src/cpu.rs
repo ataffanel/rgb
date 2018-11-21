@@ -1,5 +1,8 @@
 // Emulation of the Game Boy LR35902 cpu
 
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 use crate::bootstrap::Bootstrap;
 use crate::cart::Cart;
 use crate::mem::Mem;

@@ -9,7 +9,6 @@ pub struct Cart {
     pub ram: Vec<u8>,
 
     // Cart config
-    has_mapper: bool,
     mapper_type: Type,
     ram_size: usize,
     type_str: &'static str,
@@ -186,7 +185,6 @@ impl Cart {
             _    => (Type::Unknown,false, false, false, false, "Uknown"),
         };
 
-        let has_mapper = if let Type::ROM = decoded_type.0 { false } else { true };
         let has_ram = decoded_type.1;
 
         let ram;
@@ -225,7 +223,6 @@ impl Cart {
             rom: buffer,
             ram: ram,
 
-            has_mapper: has_mapper,
             mapper_type: decoded_type.0,
             ram_banking_mode: false,
             ram_enable: false,

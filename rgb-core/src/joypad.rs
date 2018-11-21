@@ -37,8 +37,8 @@ impl Joypad {
     }
 
     // Memory access
-    pub fn read(&self, address: u16) -> u8 { self.reg }
-    pub fn write(&mut self, address: u16, data: u8) { self.reg = (self.reg&0xCF) | (data&0x30); }
+    pub fn read(&self, _address: u16) -> u8 { self.reg }
+    pub fn write(&mut self, _address: u16, data: u8) { self.reg = (self.reg&0xCF) | (data&0x30); }
 
     //emulator loop access
     pub fn set_button(&mut self, button: JoypadButton, pressed: bool) {

@@ -77,8 +77,13 @@ name = "rgb"
 version = "0.1.0"
 dependencies = [
  "clap 2.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rgb-core 0.1.0",
  "sdl2 0.29.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "rgb-core"
+version = "0.1.0"
 
 [[package]]
 name = "sdl2"

@@ -14,14 +14,14 @@ use sdl2::keyboard::Keycode;
 //use sdl2::joystick::JoystickSubsystem;
 use sdl2::controller::Button;
 
-mod cart;
-mod cpu;
-mod mem;
-mod video;
+extern crate rgb_core;
+use rgb_core::bootstrap;
+use rgb_core::cart;
+use rgb_core::cpu;
+use rgb_core::joypad;
+use rgb_core::mem;
+
 mod display;
-mod bootstrap;
-mod joypad;
-mod timer;
 
 fn main() {
     let matches = App::new("rgb")

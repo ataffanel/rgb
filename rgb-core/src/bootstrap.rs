@@ -29,6 +29,12 @@ impl Bootstrap {
         }
     }
 
+    pub fn create_default() -> Bootstrap {
+        Bootstrap {
+            bootstrap: include_bytes!("../bootstrap/bootstrap.bin").to_vec(),
+        }
+    }
+
     pub fn read(&self, address: u16) -> u8 {
         return self.bootstrap[address as usize]
     }

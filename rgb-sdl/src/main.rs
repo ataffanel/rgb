@@ -45,8 +45,7 @@ fn main() {
             }
         };
     } else {
-        // panic!("Integrated bootstrap not implemented yet. Please set one.")
-        bootstrap = bootstrap::Bootstrap::create_from_slice(include_bytes!("../bootstrap/bootstrap.bin"));
+        bootstrap = bootstrap::Bootstrap::create_default();
     }
 
 

@@ -2,3 +2,7 @@ target
 *.asm
 *.ihx
 *.lst
+.idea
+memory_space.bin
+vram.bin
+workram.bin

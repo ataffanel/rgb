@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 pub mod cart;
 pub mod cpu;
 pub mod mem;

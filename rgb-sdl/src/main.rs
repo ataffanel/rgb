@@ -59,6 +59,7 @@ fn main() {
     }
 
     let cart = cart::Cart::load(&rom_path.to_string(), ram_path.map(|s| s.to_string()).as_ref());
+
     match cart {
         Ok(_) => (),
         Err(err) => {
@@ -137,12 +138,12 @@ fn dump_ram(filename: &str, vram: &[u8]) {
 fn dump_memory_space(filename: &str, mem: &mem::Mem) {
     let mut f = File::create(filename).unwrap();
     for addr in 0 .. 65536 {
-        f.write(&[mem.read(addr as u16)]).unwrap();
+        f.write_all(&[mem.read(addr as u16)]).unwrap();
     }
 }
 
 fn decode_keyboard(ev: &Event) -> Option<(joypad::JoypadButton, bool)> {
-    return match *ev {
+    match *ev {
         Event::KeyDown { keycode: Some(Keycode::Return), .. } => Some((joypad::JoypadButton::Start, true)),
         Event::KeyDown { keycode: Some(Keycode::Up), .. } => Some((joypad::JoypadButton::Up, true)),
         Event::KeyDown { keycode: Some(Keycode::Down), .. } => Some((joypad::JoypadButton::Down, true)),
@@ -162,7 +163,7 @@ fn decode_keyboard(ev: &Event) -> Option<(joypad::JoypadButton, bool)> {
 }
 
 fn decode_gamecontroller(ev: &Event) -> Option<(joypad::JoypadButton, bool)> {
-    return match *ev {
+    match *ev {
         Event::ControllerButtonDown { button: Button::Start, .. } => Some((joypad::JoypadButton::Start, true)),
         Event::ControllerButtonUp { button: Button::Start, .. } => Some((joypad::JoypadButton::Start, false)),
         Event::ControllerButtonDown { button: Button::Back, .. } => Some((joypad::JoypadButton::Select, true)),

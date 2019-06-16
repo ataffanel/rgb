@@ -178,11 +178,11 @@ impl Video {
     pub fn read(&self, address: u16) -> u8 {
         match address {
             _ if address >= 0x8000 && address < 0xA000 => match self.mode {
-                Mode::Mode3 => 0xff,
+                // Mode::Mode3 => 0xff,
                 _ => self.vram[(address&0x1fff) as usize],
             },
             _ if address >= 0xFE00 && address <= 0xFE9F => match self.mode {
-                Mode::Mode2 | Mode::Mode3 => 0xff,
+                // Mode::Mode2 | Mode::Mode3 => 0xff,
                 _ => self.oam[(address & 0xff) as usize],
             },
             _ if address & 0x00f0 == 0x40 => self.registers[(address&0x000f) as usize],

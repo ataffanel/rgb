@@ -25,6 +25,12 @@ macro_rules! trace {
     ( $($x:expr), * ) => ()
 }
 
+#[cfg(feature="trace_cpu")]
+const TRACE_ENABLE: bool = true;
+#[cfg(not(feature="trace_cpu"))]
+const TRACE_ENABLE: bool = false;
+
+
 pub const IRQ_VBLANK: u8 = 0x01;
 pub const IRQ_LCDSTAT: u8 = 0x02;
 pub const IRQ_TIMER: u8 = 0x04;
@@ -391,8 +397,10 @@ impl Cpu {
         let address;
         if immediate{
             address = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
-            let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
-            trace!("{:04x}: JP {}${:04x}", self.regs.pc, cond_str, address);
+            if TRACE_ENABLE {
+                let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
+                trace!("{:04x}: JP {}${:04x}", self.regs.pc, cond_str, address);
+            }
         } else {
             address = self.get_reg16_by_id(HL_REGID);
             trace!("{:04x}: JP (HL)", self.regs.pc);
@@ -410,8 +418,11 @@ impl Cpu {
 
     fn jr(&mut self, conditional: bool, condition: u8) -> usize {
         let val = self.mem.read(self.regs.pc+1) as i8;
-        let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
-        trace!("{:04x}: JR {}{}", self.regs.pc, cond_str, val);
+        if TRACE_ENABLE {
+            let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
+            trace!("{:04x}: JR {}{}", self.regs.pc, cond_str, val);
+        }
+        
         self.regs.pc += 2;
         if !conditional || self.test_condition(condition) {
             let newpc = (self.regs.pc as i32) + (val as i32);
@@ -435,8 +446,10 @@ impl Cpu {
 
     fn call(&mut self, conditional: bool, condition: u8) -> usize {
         let newpc = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
-        let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
-        trace!("{:04x}: CALL {}${:04x}", self.regs.pc, cond_str, newpc);
+        if TRACE_ENABLE {
+            let cond_str = if conditional { format!("{}, ", COND_NAMES[condition as usize]) } else { String::from("") };
+            trace!("{:04x}: CALL {}${:04x}", self.regs.pc, cond_str, newpc);
+        }
         self.regs.pc += 3;
         if !conditional || self.test_condition(condition) {
             self.mem.write(self.regs.sp-1, (self.regs.pc>>8) as u8);
@@ -450,8 +463,10 @@ impl Cpu {
     }
 
     fn ret(&mut self, conditional: bool, condition: u8) -> usize {
-        let cond_str = if conditional { format!(" {}", COND_NAMES[condition as usize]) } else { String::from("") };
-        trace!("{:04x}: RET{}", self.regs.pc, cond_str);
+        if TRACE_ENABLE {
+            let cond_str = if conditional { format!(" {}", COND_NAMES[condition as usize]) } else { String::from("") };
+            trace!("{:04x}: RET{}", self.regs.pc, cond_str);
+        }
         self.regs.pc += 1;
         if !conditional || self.test_condition(condition) {
             let pc_l = self.mem.read(self.regs.sp);
@@ -484,12 +499,18 @@ impl Cpu {
         let addr_str;
         if immediate {
             address = self.mem.read(self.regs.pc+1);
-            addr_str = format!("${:02x}", address);
             self.regs.pc += 2;
         } else {
             address = self.regs.c;
-            addr_str = String::from("C");
             self.regs.pc += 1;
+        }
+
+        if TRACE_ENABLE {
+            if immediate {
+                addr_str = format!("${:02x}", address);
+            } else {
+                addr_str = "C".to_owned();
+            }
         }
 
         if store {
@@ -536,20 +557,19 @@ impl Cpu {
     fn ld_ind(&mut self, immediate: bool, store: bool, reg_id: u8) -> usize {
         let address: u16;
 
-        let (address, reg_name) = if immediate {
-            let addr = (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16;
-            (addr, format!("${:04x}", addr))
+        let address= if immediate {
+            (self.mem.read(self.regs.pc+2) as u16)<<8 |  self.mem.read(self.regs.pc+1) as u16
         } else {
             match reg_id {
-                0 => ((self.regs.b as u16) << 8 | self.regs.c as u16, "BC".to_string()),
-                1 => ((self.regs.d as u16) << 8 | self.regs.e as u16, "DE".to_string()),
+                0 => (self.regs.b as u16) << 8 | self.regs.c as u16,
+                1 => (self.regs.d as u16) << 8 | self.regs.e as u16,
                 2 => {
                     let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
                     let new_hl = hl+1;
                     self.regs.h = (new_hl >> 8) as u8;
                     self.regs.l = new_hl as u8;
 
-                    (hl, "HL+".to_string())
+                    hl
                 },
                 3 => {
                     let hl = (self.regs.h as u16) << 8 | self.regs.l as u16;
@@ -557,20 +577,38 @@ impl Cpu {
                     self.regs.h = (new_hl >> 8) as u8;
                     self.regs.l = new_hl as u8;
 
-                    (hl, "HL-".to_string())
+                    hl
                 },
                 _ => panic!("Bug in decoding")
             }
         };
 
+
         if store {
-            self.mem.write(address, self.regs.a);
-            trace!("{:04x}: LD ({}), A", self.regs.pc, reg_name);
+            self.mem.write(address, self.regs.a); 
         } else {
             self.regs.a = self.mem.read(address);
-            trace!("{:04x}: LD A, ({})", self.regs.pc, reg_name);
         }
 
+        if TRACE_ENABLE {
+            let reg_name = if immediate {
+                format!("${:04x}", address)
+            } else {
+                match reg_id {
+                    0 => "BC".to_string(),
+                    1 => "DE".to_string(),
+                    2 => "HL+".to_string(),
+                    3 => "HL-".to_string(),
+                    _ => panic!("Bug in decoding")
+                }
+            };
+
+            if store {
+                trace!("{:04x}: LD ({}), A", self.regs.pc, reg_name);
+            } else {
+                trace!("{:04x}: LD A, ({})", self.regs.pc, reg_name);
+            }
+        }
 
         if immediate {
             self.regs.pc += 3;

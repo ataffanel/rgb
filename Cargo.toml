@@ -4,3 +4,6 @@ members = [
     "rgb-core",
     "rgb-sdl",
 ]
+
+[profile.release]
+debug = true

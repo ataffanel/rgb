@@ -43,16 +43,16 @@ pub enum Type {
 }
 
 impl Cart {
-    pub fn load(rom_path: &String, ram_save: Option<&String>) -> Result<Cart, CartLoadError> {
-        let mut f = r#try!(File::open(rom_path));
+    pub fn load(rom_path: &str, ram_save: Option<&String>) -> Result<Cart, CartLoadError> {
+        let mut f = File::open(rom_path)?;
         let mut buffer = Vec::new();
-        r#try!(f.read_to_end(&mut buffer));
+        f.read_to_end(&mut buffer)?;
 
         let ram_buffer;
         if let Some(ram_filename) = ram_save {
-            let mut fr = r#try!(File::open(ram_filename));
+            let mut fr = File::open(ram_filename)?;
             let mut buffer = Vec::new();
-            r#try!(fr.read_to_end(&mut buffer));
+            fr.read_to_end(&mut buffer)?;
             ram_buffer = Some(buffer);
         } else {
             ram_buffer = None;
@@ -71,7 +71,7 @@ impl Cart {
         match address {
             _ if address < 0x4000 => if (address as usize) < self.rom.len() { self.rom[address as usize] } else { 0xff },
             _ if address < 0x8000 => self.rom[bank_offset + ((address&0x3fff) as usize)],
-            _ if address >= 0xA000 && address < 0xC000 => {
+            _ if (0xA000..0xC000).contains(&address) => {
                     if self.ram_size != 0 {self.ram[ram_offset + ((address&0x1fff) as usize)]} else {0}
                 }
             _ => { println!("Warning: Reading outside the rom!"); 0 }
@@ -84,7 +84,7 @@ impl Cart {
 
         match address {
             _ if address < 0x8000 => self.write_mbc(address, data),
-            _ if address >= 0xA000 && address < 0xC000 => self.write_ram(address, data),
+            _ if (0xA000..0xC000).contains(&address) => self.write_ram(address, data),
             _ => { println!("Writing in cart addr {:04x} data {:02x}", address, data); },
         }
     }
@@ -95,7 +95,7 @@ impl Cart {
             Type::ROM => (),
             Type::MBC1 => {
                 match address & 0x6000 {
-                    0x0000 => self.ram_enable = if data&0x0f == 0x0a {true} else {false},
+                    0x0000 => self.ram_enable = data&0x0f == 0x0a,
                     0x2000 => {
                         self.rom_bank = (if data==0 {1} else {self.rom_bank} & 0x60) | (data&0x1f) as usize
                     }
@@ -114,7 +114,7 @@ impl Cart {
                         } else {
                             self.ram_banking_mode = true;
                             self.ram_bank = (self.rom_bank & 0x60) >> 5;
-                            self.rom_bank = self.rom_bank & 0x1f;
+                            self.rom_bank &= 0x1f;
                         }
                     },
                     _ => (),
@@ -122,17 +122,14 @@ impl Cart {
             }
             Type::MBC2 => {
                 self.ram_enable = true;
-                match address & 0x6000 {
-                    0x2000 => self.rom_bank = (data & 0x0F) as usize,
-                    _ => (),
-                }
+                if address & 0x6000 == 0x2000 { self.rom_bank = (data & 0x0F) as usize }
             }
             Type::MBC5 => {
                 match address & 0x7000 {
-                    0x0000...0x1000 => self.ram_enable = if data&0x0f == 0x0a {true} else {false},
+                    0x0000..=0x1000 => self.ram_enable = data&0x0f == 0x0a,
                     0x2000 => self.rom_bank = (self.rom_bank & 0x100) | data as usize,
                     0x3000 => self.rom_bank = (self.rom_bank & 0x0FF) | (((data & 0x01) as usize) << 8),
-                    0x4000...0x5000 => self.ram_bank = (data & 0x0f) as usize,
+                    0x4000..=0x5000 => self.ram_bank = (data & 0x0f) as usize,
                     _ => (),
                 }
             }
@@ -221,7 +218,7 @@ impl Cart {
 
         Ok(Cart {
             rom: buffer,
-            ram: ram,
+            ram,
 
             mapper_type: decoded_type.0,
             ram_banking_mode: false,
@@ -229,9 +226,9 @@ impl Cart {
             rom_bank: 1,
             ram_bank: 0,
 
-            ram_size: ram_size,
-            ram_data_mask: ram_data_mask,
-            ram_addr_mask: ram_addr_mask,
+            ram_size,
+            ram_data_mask,
+            ram_addr_mask,
 
             type_str: decoded_type.5,
         })

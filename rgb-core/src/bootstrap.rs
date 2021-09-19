@@ -12,11 +12,11 @@ pub struct BootstrapLoadError {
 }
 
 impl Bootstrap {
-    pub fn load(path: &String) -> Result<Bootstrap, BootstrapLoadError> {
-        let mut f = r#try!(File::open(path));
+    pub fn load(path: &str) -> Result<Bootstrap, BootstrapLoadError> {
+        let mut f = File::open(path)?;
         let mut buffer = Vec::new();
 
-        r#try!(f.read_to_end(&mut buffer));
+        f.read_to_end(&mut buffer)?;
 
         Ok(Bootstrap {
             bootstrap: buffer,
@@ -36,7 +36,7 @@ impl Bootstrap {
     }
 
     pub fn read(&self, address: u16) -> u8 {
-        return self.bootstrap[address as usize]
+        self.bootstrap[address as usize]
     }
 }
 

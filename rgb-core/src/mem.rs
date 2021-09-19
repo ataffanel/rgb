@@ -26,8 +26,8 @@ pub struct Mem {
 impl Mem {
     pub fn new(bootstrap: Bootstrap, cart: Cart) -> Mem {
         Mem {
-            bootstrap: bootstrap,
-            cart: cart,
+            bootstrap,
+            cart,
             work: vec![0; 8*1024],
             hram: vec![0; 256],
             reg_ie: 0,

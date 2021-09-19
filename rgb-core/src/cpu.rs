@@ -46,7 +46,7 @@ const L_REGID: u8 = 5;
 const IND_HL_REGID: u8 = 6;
 const A_REGID: u8 = 7;
 
-const REG_NAMES: &'static [ &'static str ] = &["B", "C", "D", "E", "H", "L", "(HL)", "A"];
+const REG_NAMES: &[ &str ] = &["B", "C", "D", "E", "H", "L", "(HL)", "A"];
 
 // 16Bit register id as encoded in instructions
 const BC_REGID: u8 = 0;
@@ -54,7 +54,7 @@ const DE_REGID: u8 = 1;
 const HL_REGID: u8 = 2;
 const SP_REGID: u8 = 3;
 
-const DD_NAMES: &'static [ &'static str ] = &["BC", "DE", "HL", "SP"];
+const DD_NAMES: &[ &str ] = &["BC", "DE", "HL", "SP"];
 
 // ALU operations
 const ALU_ADD: u8 = 0;
@@ -66,7 +66,7 @@ const ALU_XOR: u8 = 5;
 const ALU_OR : u8 = 6;
 const ALU_CP : u8 = 7;
 
-const ALU_NAMES: &'static [ &'static str ] = &["ADD", "ADC", "SUB", "SBC", "AND", "XOR", "OR", "CP"];
+const ALU_NAMES: &[ &str ] = &["ADD", "ADC", "SUB", "SBC", "AND", "XOR", "OR", "CP"];
 
 // Jump conditions
 const COND_NZ: u8 = 0;
@@ -74,7 +74,7 @@ const COND_Z : u8 = 1;
 const COND_NC: u8 = 2;
 const COND_C : u8 = 3;
 
-const COND_NAMES: &'static [ &'static str ] = &["NZ", "Z", "NC", "C"];
+const COND_NAMES: & [ &str ] = &["NZ", "Z", "NC", "C"];
 
 // BC ALU operations
 const BCALU_RLC :u8 = 0;
@@ -86,7 +86,7 @@ const BCALU_SRA :u8 = 5;
 const BCALU_SWAP:u8 = 6;
 const BCALU_SRL :u8 = 7;
 
-const BCALU_NAMES: &'static [ &'static str ] = &["RLC", "RRC", "RL", "RR", "SLA", "SRA", "SWAP", "SRL"];
+const BCALU_NAMES: &[ &str ] = &["RLC", "RRC", "RL", "RR", "SLA", "SRA", "SWAP", "SRL"];
 
 #[derive(PartialEq)]
 struct Regs {
@@ -106,7 +106,7 @@ struct Regs {
 impl fmt::Debug for Regs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut debug = String::new();
-        debug.push_str(&format!("+-Registers--\n",));
+        debug.push_str("+-Registers--\n");
         debug.push_str(&format!("| A: {:02x} F: {:02x}\n", self.a, self.f));
         debug.push_str(&format!("| B: {:02x} C: {:02x}\n", self.b, self.c));
         debug.push_str(&format!("| D: {:02x} E: {:02x}\n", self.d, self.e));
@@ -1038,7 +1038,7 @@ impl Cpu {
         };
 
         self.set_reg8_by_id(reg_id, value);
-        self.set_flag(ZERO_FLAG, value&0xff == 0);
+        self.set_flag(ZERO_FLAG, value == 0);
 
         if reg_id == IND_HL_REGID {12} else {4}
     }

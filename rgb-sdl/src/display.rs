@@ -4,7 +4,6 @@
 use sdl2::pixels::PixelFormatEnum::BGR24;
 use sdl2::render::{Renderer, Texture, TextureAccess};
 use sdl2::Sdl;
-use sdl2;
 
 /// Emulated screen width in pixels
 const SCREEN_WIDTH: usize = 160;

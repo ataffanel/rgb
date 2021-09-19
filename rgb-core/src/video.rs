@@ -73,7 +73,7 @@ enum Interrupt {
 //                                                  [127,127,127],
 //                                                  [64,64,64],
 //                                                  [0,0,0],];
-const COLOR_MAPPING: &'static [ [u8; 3]; 4 ] = &[[149, 176, 29],
+const COLOR_MAPPING: &[ [u8; 3]; 4 ] = &[[149, 176, 29],
                                                  [108, 136, 41],
                                                  [58, 100, 60],
                                                  [29, 62, 30],];
@@ -177,11 +177,11 @@ impl Video {
 
     pub fn read(&self, address: u16) -> u8 {
         match address {
-            _ if address >= 0x8000 && address < 0xA000 => match self.mode {
+            _ if (0x8000..0xA000).contains(&address) => match self.mode {
                 // Mode::Mode3 => 0xff,
                 _ => self.vram[(address&0x1fff) as usize],
             },
-            _ if address >= 0xFE00 && address <= 0xFE9F => match self.mode {
+            _ if (0xFE00..=0xFE9F).contains(&address) => match self.mode {
                 // Mode::Mode2 | Mode::Mode3 => 0xff,
                 _ => self.oam[(address & 0xff) as usize],
             },
@@ -192,11 +192,11 @@ impl Video {
 
     pub fn write(&mut self, address:u16, data: u8) {
         match address {
-            _ if address >= 0x8000 && address < 0xA000 => match self.mode {
+            _ if (0x8000..0xA000).contains(&address) => match self.mode {
                 //Mode::Mode3 => (),
                 _ => self.vram[(address&0x1fff) as usize] = data,
             },
-            _ if address >= 0xFE00 && address <= 0xFE9F => match self.mode {
+            _ if (0xFE00..=0xFE9F).contains(&address) => match self.mode {
                 //Mode::Mode2 | Mode::Mode3 => (),
                 _ => self.oam[(address & 0xff) as usize] = data,
             },
@@ -222,8 +222,7 @@ impl Video {
         }
 
         let line = &mut self.screen[current_line*LINE_WIDTH*3 .. (current_line+1)*LINE_WIDTH*3];
-        let mut i = 0;
-        for pixel in line_pixels.into_iter() {
+        for (i, pixel) in line_pixels.iter().enumerate() {
             let color = match pixel.palette {
                 Palette::BLANK => 0,
                 Palette::BGP => ((self.registers[BGP] as usize) >> (pixel.color*2))&0x03,
@@ -231,10 +230,9 @@ impl Video {
                 Palette::OBP1 => ((self.registers[OBP1] as usize) >> (pixel.color*2))&0x03,
             };
 
-            line[(3*i)+0]= self.color_map[color][2];
+            line[3*i]= self.color_map[color][2];
             line[(3*i)+1]= self.color_map[color][1];
             line[(3*i)+2]= self.color_map[color][0];
-            i += 1;
         }
     }
 
@@ -243,13 +241,13 @@ impl Video {
         let bg_x = self.registers[SCX] as usize;
         let bg_y = (current_line+(self.registers[SCY] as usize))&0xff;
         let y_in_tile = bg_y&0x07;
-        for i in 0..LINE_WIDTH {
+        for (i, pixel) in line_pixels.iter_mut().enumerate() {
             let x = (bg_x + i)&0xff;
             let tile_pos = ((bg_y&0xF8)<<2) | ((x>>3)&0x1F);
             let x_in_tile = x&0x07;
 
-            line_pixels[i].color = self.get_bg_tile_pixel(tile_pos, y_in_tile, x_in_tile);
-            line_pixels[i].palette = Palette::BGP;
+            pixel.color = self.get_bg_tile_pixel(tile_pos, y_in_tile, x_in_tile);
+            pixel.palette = Palette::BGP;
         }
     }
 
@@ -258,8 +256,8 @@ impl Video {
         let x_in_window = (self.registers[WX] as isize) - 7;
         let y_in_window = current_line - (self.registers[WY] as isize);
 
-        if y_in_window >= 0 && y_in_window < 144 {
-            for x in 0..LINE_WIDTH {
+        if (0..144).contains(&y_in_window) {
+            for (x, pixel) in line_pixels.iter_mut().enumerate() {
                 let x_in_window = x_in_window + (x as isize);
                 if x_in_window >= 0 && x_in_window < (LINE_WIDTH as isize) {
                     let (wx, wy) = (x_in_window as usize, y_in_window as usize);
@@ -270,8 +268,8 @@ impl Video {
                     let tile_map_addr: usize = if self.registers[LCDC]&(1<<6)==0 {0x1800} else {0x1c00};
                     let tile_id = self.vram[tile_map_addr + tile_pos] as u8;
 
-                    line_pixels[x].palette = Palette::BGP;
-                    line_pixels[x].color = Video::get_tile_color(&self.vram, self.registers[LCDC]&(1<<6)!=0,
+                    pixel.palette = Palette::BGP;
+                    pixel.color = Video::get_tile_color(&self.vram, self.registers[LCDC]&(1<<6)!=0,
                                                                 tile_id, tile_col, tile_line);
                 }
             }
@@ -286,16 +284,13 @@ impl Video {
         if self.registers[LCDC]&0x10 == 0 {
             tile_address = (0x1000 + (((tile_id as i8) as isize)*16)) as usize;
         } else {
-            tile_address = 0x0000 + ((tile_id as usize)*16);
+            tile_address = (tile_id as usize)*16;
         }
 
         let low = self.vram[tile_address+(2*line)] as usize;
         let high = self.vram[tile_address+(2*line)+1] as usize;
 
-        let unmapped = (((high>>(7-col&0x07))&0x01)<<1) | ((low>>(7-col&0x07))&0x01);
-
-        //((self.registers[BGP] as usize) >> (unmapped*2))&0x03
-        unmapped
+        (((high>>((7-col) & 0x07))&0x01)<<1) | ((low>>((7-col) & 0x07))&0x01)
     }
 
     fn get_tile_color(vram: &[u8], signed_id: bool, tile_id: u8, col: usize, line: usize) -> usize {
@@ -304,13 +299,13 @@ impl Video {
         if signed_id {
             tile_address = (0x1000 + (((tile_id as i8) as isize)*16)) as usize;
         } else {
-            tile_address = 0x0000 + ((tile_id as usize)*16);
+            tile_address = (tile_id as usize) * 16;
         }
 
         let low = vram[tile_address+(2*line)] as usize;
         let high = vram[tile_address+(2*line)+1] as usize;
 
-        (((high>>(7-col&0x07))&0x01)<<1) | ((low>>(7-col&0x07))&0x01)
+        (((high>>((7-col) & 0x07))&0x01)<<1) | ((low>>((7-col) & 0x07))&0x01)
     }
 
     fn draw_sprites(&mut self, line_pixels: &mut [Pixel]) {
@@ -332,22 +327,26 @@ impl Video {
                 for x in start..attribute[1] {
                     let x = x as usize;
                     let start = start as usize;
-                    if x<LINE_WIDTH {
-                        if line_pixels[x].palette == Palette::BGP && above_bg || line_pixels[x].color == 0 {
-                            let mut line = ly-(attribute[0].wrapping_sub(16) as usize);
-                            let mut rcol = col;
-                            if x_flip { rcol = 7 - col; }
-                            if y_flip { line = height as usize - 1 - line; }
-                            let color = Video::get_tile_color(&self.vram, false, attribute[2], rcol, line);
-                            if color != 0 {
-                                line_pixels[x].color = color;
-                                line_pixels[x].palette = pallette;
-                            }
-                            col += 1;
+                    if x<LINE_WIDTH && (line_pixels[x].palette == Palette::BGP && above_bg || line_pixels[x].color == 0) {
+                        let mut line = ly-(attribute[0].wrapping_sub(16) as usize);
+                        let mut rcol = col;
+                        if x_flip { rcol = 7 - col; }
+                        if y_flip { line = height as usize - 1 - line; }
+                        let color = Video::get_tile_color(&self.vram, false, attribute[2], rcol, line);
+                        if color != 0 {
+                            line_pixels[x].color = color;
+                            line_pixels[x].palette = pallette;
                         }
+                        col += 1;
                     }
                 }
             }
         }
+    }
+}
+
+impl Default for Video {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -6,3 +6,5 @@ target
 memory_space.bin
 vram.bin
 workram.bin
+flamegraph.svg
+perf.data*

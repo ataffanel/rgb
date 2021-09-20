@@ -1,5 +1,5 @@
 #![warn(clippy::all)]
-#![allow(clippy::clippy::upper_case_acronyms)]
+#![allow(clippy::upper_case_acronyms)]
 
 pub mod cart;
 pub mod cpu;

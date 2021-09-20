@@ -4,3 +4,6 @@ version = "0.1.0"
 authors = ["Arnaud Taffanel <arnaud@bitcraze.io>"]
 
 [dependencies]
+
+[features]
+trace_cpu=[]

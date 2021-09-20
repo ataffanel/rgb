@@ -505,7 +505,8 @@ impl Cpu {
             self.regs.pc += 1;
         }
 
-        if TRACE_ENABLE {
+        #[cfg(feature="trace_cpu")]
+        {
             if immediate {
                 addr_str = format!("${:02x}", address);
             } else {
@@ -590,7 +591,8 @@ impl Cpu {
             self.regs.a = self.mem.read(address);
         }
 
-        if TRACE_ENABLE {
+        #[cfg(feature="trace_cpu")]
+        {
             let reg_name = if immediate {
                 format!("${:04x}", address)
             } else {

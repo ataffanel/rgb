@@ -8,6 +8,3 @@ edition="2018"
 sdl2 = "0.29.0"
 clap = "2"
 rgb-core = { path = "../rgb-core" }
-
-[features]
-trace_cpu=[]

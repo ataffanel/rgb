@@ -496,7 +496,7 @@ impl Cpu {
     #[allow(unused_assignments)]
     fn ldh(&mut self, immediate: bool, store: bool) -> usize {
         let address;
-        let addr_str;
+        
         if immediate {
             address = self.mem.read(self.regs.pc+1);
             self.regs.pc += 2;
@@ -507,6 +507,8 @@ impl Cpu {
 
         #[cfg(feature="trace_cpu")]
         {
+            let addr_str;
+            
             if immediate {
                 addr_str = format!("${:02x}", address);
             } else {

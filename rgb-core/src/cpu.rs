@@ -496,7 +496,7 @@ impl Cpu {
     #[allow(unused_assignments)]
     fn ldh(&mut self, immediate: bool, store: bool) -> usize {
         let address;
-        
+
         if immediate {
             address = self.mem.read(self.regs.pc+1);
             self.regs.pc += 2;
@@ -653,39 +653,31 @@ impl Cpu {
         if pop { 12 } else { 16 }
     }
 
+    // Algorithm by AaronLiu (HFO4) translated from https://github.com/HFO4/gameboy.live/blob/657501f18a60c486366cd04b87025a7781db1fd1/gb/opcodes.go#L1351-L1377
     fn daa(&mut self) -> usize {
         trace!("{:04x}: DAA", self.regs.pc);
         self.regs.pc += 1;
 
-        // Get easy to use values
-        let low = self.regs.a & 0x0f;
-        let high = self.regs.a >> 4;
-        let h = self.get_flag(HALF_CARRY_FLAG);
-        let c = self.get_flag(CARRY_FLAG);
-        let n = self.get_flag(SUBSTRACT_FLAG);
-
-        let diff: u8 = if low < 10 && high < 10 && !h && !c {
-            0
-        } else if (low < 10 && high < 10 && h && !c) ||
-                  (low > 9 && high < 9 && !c) {
-            0x06
-        } else if low < 10 && !h && (high > 9 || c) {
-            0x60
-        } else {
-            0x66
-        };
-
-        if n {
-            //diff = (!diff).wrapping_add(1);
-            self.regs.a = self.regs.a.wrapping_sub(diff);
-        } else {
-            self.regs.a = self.regs.a.wrapping_add(diff);
+        if !self.get_flag(SUBSTRACT_FLAG) {
+            if self.get_flag(CARRY_FLAG) || self.regs.a > 0x99 {
+                self.regs.a += 0x60;
+                self.set_flag(CARRY_FLAG, true);
+            }
+            if self.get_flag(HALF_CARRY_FLAG) || self.regs.a&0x0F > 0x09 {
+                self.regs.a += 0x06;
+                self.set_flag(HALF_CARRY_FLAG, false)
+            }
+        } else if self.get_flag(CARRY_FLAG) && self.get_flag(HALF_CARRY_FLAG) {
+            self.regs.a += 0x9A;
+            self.set_flag(HALF_CARRY_FLAG, false);
+        } else if self.get_flag(CARRY_FLAG) {
+            self.regs.a += 0xA0;
+        } else if self.get_flag(HALF_CARRY_FLAG) {
+            self.regs.a += 0xFA;
+            self.set_flag(HALF_CARRY_FLAG, false);
         }
-
-
-
-        self.set_flag(CARRY_FLAG, c || (low > 9 && high > 8) || (low < 9 && high > 9));
-        self.set_flag(HALF_CARRY_FLAG, low > 9 || (n && h && low < 6));
+        
+        self.set_flag(ZERO_FLAG, self.regs.a == 0);
 
         4
     }

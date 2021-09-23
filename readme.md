@@ -8,8 +8,9 @@ but more as being a Rust playground that I can dig into from time to time.
 
 ## Status
 
-The CPU is almost fully accurate, input works and the video is good enough for
-most games. There has been no attempt to implement sound so far.
+The CPU is accurate (passes the cpu_instrs.gb test rom), input works and the
+video is good enough for most games. There has been no attempt to implement
+sound so far.
 
 Supports reading and writing `.sav` file for saving game progress. A minimal
 bootstrap ROM is included, but another one can be provided on the command line.

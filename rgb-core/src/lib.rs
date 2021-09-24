@@ -9,3 +9,6 @@ pub mod bootstrap;
 pub mod joypad;
 pub mod timer;
 
+mod dmg;
+
+pub use dmg::Dmg;

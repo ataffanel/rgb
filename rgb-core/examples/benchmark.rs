@@ -10,7 +10,7 @@ fn main(){
     }
 
     let cart = rgb_core::cart::Cart::load(&args[1], None).unwrap();
-    let mut cpu = rgb_core::cpu::Cpu::new(rgb_core::bootstrap::Bootstrap::create_default(), cart);
+    let mut dmg = rgb_core::Dmg::new(cart);
 
 
     let cycles = 40_000_000;
@@ -18,13 +18,7 @@ fn main(){
     let mut frames = 0;
 
     for _ in 0..cycles {
-        cpu.step();
-        cpu.mem.step();
-        cpu.mem.reg_if |= cpu.mem.timer.step(cpu.cycle);
-        cpu.mem.reg_if |= cpu.mem.video.step(cpu.cycle);
-        cpu.mem.joypad.step();
-
-        if cpu.mem.video.image_ready {
+        if dmg.step() {
             frames += 1;
         }
     }

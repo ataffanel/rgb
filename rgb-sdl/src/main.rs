@@ -7,6 +7,7 @@ extern crate clap;
 use clap::App;
 
 extern crate sdl2;
+use rgb_core::Dmg;
 use sdl2::Sdl;
 use sdl2::event::Event;
 //use sdl2::event::Event::*;
@@ -17,7 +18,6 @@ use sdl2::controller::Button;
 extern crate rgb_core;
 use rgb_core::bootstrap;
 use rgb_core::cart;
-use rgb_core::cpu;
 use rgb_core::joypad;
 use rgb_core::mem;
 
@@ -75,56 +75,49 @@ fn main() {
 
     let gamepad = sdl.game_controller().unwrap().open(0);
 
-    let mut cpu = cpu::Cpu::new(bootstrap, cart);
+    let mut dmg = Dmg::new_with_bootstrap(cart, bootstrap);
 
-    println!("Starting execution of bootstrap: ");
-    cpu.reset();
-    //cpu.set_pc(0x100);
-    emulator_loop(&mut cpu, disp, sdl);
+    println!("Starting execution.");
+    dmg.reset();
+    emulator_loop(&mut dmg, disp, sdl);
 
     if let Some(path) = ram_path {
         println!("Writing back cart ram to {:?}", path);
-        dump_ram(path, &cpu.mem.cart.ram);
+        dump_ram(path, &dmg.cpu.mem.cart.ram);
     }
 
     println!("Exiting ...");
 }
 
-fn emulator_loop(cpu: &mut cpu::Cpu, mut disp: display::Display, sdl: Sdl) {
+fn emulator_loop(dmg: &mut Dmg, mut disp: display::Display, sdl: Sdl) {
     'outer: loop {
-        cpu.step();
-        cpu.mem.step();
-        cpu.mem.reg_if |= cpu.mem.timer.step(cpu.cycle);
-        cpu.mem.reg_if |= cpu.mem.video.step(cpu.cycle);
-        cpu.mem.joypad.step();
+        dmg.run_until_next_frame();
 
-        if cpu.mem.video.image_ready {
-            // Display the picture!
-            disp.render_screen(&cpu.mem.video.screen);
+        // Display the picture!
+        disp.render_screen(dmg.borrow_display());
 
-            while let Some(ev) = sdl.event_pump().unwrap().poll_event() {
-                match ev {
-                    Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'outer,
-                    Event::Quit { .. } => break 'outer,
-                    _ => {}
-                }
-                if let Some((button, pressed)) = decode_keyboard(&ev) {
-                    cpu.mem.joypad.set_button(button, pressed);
-                }
-                if let Some((button, pressed)) = decode_gamecontroller(&ev) {
-                    cpu.mem.joypad.set_button(button, pressed);
-                }
+        while let Some(ev) = sdl.event_pump().unwrap().poll_event() {
+            match ev {
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => break 'outer,
+                Event::Quit { .. } => break 'outer,
+                _ => {}
+            }
+            if let Some((button, pressed)) = decode_keyboard(&ev) {
+                dmg.set_button(button, pressed);
+            }
+            if let Some((button, pressed)) = decode_gamecontroller(&ev) {
+                dmg.set_button(button, pressed);
             }
         }
     }
 
-    println!("PC: {:04X}", cpu.get_pc());
-    cpu.print_regs();
-    println!("IE: {:04X}", cpu.mem.reg_ie);
-    println!("IF: {:04X}", cpu.mem.reg_if);
-    dump_ram("vram.bin", &cpu.mem.video.vram);
-    dump_ram("workram.bin", &cpu.mem.work);
-    dump_memory_space("memory_space.bin", &cpu.mem);
+    println!("PC: {:04X}", dmg.cpu.get_pc());
+    dmg.cpu.print_regs();
+    println!("IE: {:04X}", dmg.cpu.mem.reg_ie);
+    println!("IF: {:04X}", dmg.cpu.mem.reg_if);
+    dump_ram("vram.bin", &dmg.cpu.mem.video.vram);
+    dump_ram("workram.bin", &dmg.cpu.mem.work);
+    dump_memory_space("memory_space.bin", &dmg.cpu.mem);
 }
 
 use std::io::prelude::*;

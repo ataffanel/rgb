@@ -8,6 +8,7 @@ pub struct Audio {
     // Sound generators
     square1: SquareGenerator,
     square2: SquareGenerator,
+    wave: WaveGenerator,
 }
 
 
@@ -34,6 +35,7 @@ impl Audio {
             current_cycle: 0,
             square1: SquareGenerator::new(true),
             square2: SquareGenerator::new(false),
+            wave: WaveGenerator::new(),
         }
     }
 
@@ -47,6 +49,9 @@ impl Audio {
         match address {
             _ if address < NR20 => self.square1.set_register(address - NR10, data),
             _ if address < NR30 => self.square2.set_register(address - NR20, data),
+            _ if address < _NR40 => self.wave.set_register(address - NR30, data),
+            _ if address >= 0xff30 && address < 0xff40 => self.wave.set_sample(address - 0xff30, data),
+
 
             NR52 => println!("Write NR52 {}", data),
             _ => (),
@@ -58,11 +63,14 @@ impl Audio {
         while self.current_cycle < cycle {
             self.square1.step(self.current_cycle);
             self.square2.step(self.current_cycle);
+            self.wave.step(self.current_cycle);
     
             self.sample_timer += 1.0;
             self.current_cycle += 1;
     
-            let sample = self.square1.sample as i16 + self.square2.sample as i16;
+            let sample = self.square1.sample as i16 +
+                              self.square2.sample as i16 +
+                              self.wave.sample as i16;
     
             while self.sample_timer > SAMPLE_PERIOD {
                 self.audio_buffer.push(sample * 255);
@@ -73,7 +81,7 @@ impl Audio {
     }
 }
 
-// Sound generators
+// Square generator
 #[derive(Default, Debug)]
 struct SquareGenerator {
     enable: bool,
@@ -224,4 +232,106 @@ impl SquareGenerator {
 
     }
 
+}
+
+// Wave generator
+#[derive(Default, Debug)]
+struct WaveGenerator {
+    enable: bool,
+
+    last_frame_step_cycle: usize,
+    frame_counter: u8,
+
+    dac_power: bool,
+    length: u8,
+    length_enable: bool,
+
+    volume_code: u8,
+
+    frequency: u16,
+
+    trigger: bool,
+
+    samples: [u8; 32],
+    sample_index: usize,
+
+    timer: usize,
+    timer_period: usize,
+
+    current_cycle: usize,
+
+    sample: u8,
+}
+
+impl WaveGenerator {
+    fn new() -> Self {
+        Self { ..Default::default() }
+    }
+
+    fn set_register(&mut self, address: u16, data: u8) {
+        match address {
+            0 => self.dac_power = (data & 0x80) != 0,
+            1 => self.length = data,
+            2 => self.volume_code = (data & 0x60) >> 5,
+            3 => self.frequency = (self.frequency & 0xff00) | data as u16,
+            4 => {
+                self.frequency = (self.frequency & 0x00ff) | ((data as u16 & 0x07) << 8);
+                self.length_enable = (data & 0x40) != 0;
+                self.trigger = (data & 0x80) != 0;
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn set_sample(&mut self, address: u16, data: u8) {
+        let index = address as usize;
+        self.samples[2*index] = (data&0xf0) >> 4;
+        self.samples[(2*index)+1] = data&0x0f;
+    }
+
+    fn step(&mut self, cycle: usize) {
+
+        if self.trigger {
+            self.enable = true;
+            // self.volume = 15;
+            self.trigger = false;
+            self.timer_period = (2048 - self.frequency as usize) * 2;
+        }
+
+        if self.enable {
+            // Frame sequencer  
+            if self.last_frame_step_cycle + 2048 < cycle {
+                // Length
+                if self.frame_counter % 2 == 0 {
+                    if self.length_enable && self.length > 0 {
+                        self.length -= 1;
+                        if self.length == 0 {
+                            self.enable = false;
+                        }
+                    }
+                }
+            }
+
+            while self.current_cycle < cycle {
+                self.timer += 1;
+                if self.timer >= self.timer_period {
+
+                    self.sample = self.samples[self.sample_index] >> match self.volume_code {
+                        0 => 4,
+                        1 => 0,
+                        2 => 1,
+                        3 => 2,
+                        _ => unreachable!(),
+                    };
+
+                    self.timer = 0;
+                    self.sample_index += 1;
+                    if self.sample_index > 31 {
+                        self.sample_index = 0;
+                    }
+                }
+                self.current_cycle += 1;
+            }
+        }
+    }
 }

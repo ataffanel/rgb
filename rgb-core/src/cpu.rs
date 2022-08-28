@@ -660,20 +660,20 @@ impl Cpu {
 
         if !self.get_flag(SUBSTRACT_FLAG) {
             if self.get_flag(CARRY_FLAG) || self.regs.a > 0x99 {
-                self.regs.a += 0x60;
+                self.regs.a = self.regs.a.wrapping_add(0x60);
                 self.set_flag(CARRY_FLAG, true);
             }
             if self.get_flag(HALF_CARRY_FLAG) || self.regs.a&0x0F > 0x09 {
-                self.regs.a += 0x06;
+                self.regs.a = self.regs.a.wrapping_add(0x06);
                 self.set_flag(HALF_CARRY_FLAG, false)
             }
         } else if self.get_flag(CARRY_FLAG) && self.get_flag(HALF_CARRY_FLAG) {
-            self.regs.a += 0x9A;
+            self.regs.a = self.regs.a.wrapping_add(0x9A);
             self.set_flag(HALF_CARRY_FLAG, false);
         } else if self.get_flag(CARRY_FLAG) {
-            self.regs.a += 0xA0;
+            self.regs.a = self.regs.a.wrapping_add(0xA0);
         } else if self.get_flag(HALF_CARRY_FLAG) {
-            self.regs.a += 0xFA;
+            self.regs.a = self.regs.a.wrapping_add(0xFA);
             self.set_flag(HALF_CARRY_FLAG, false);
         }
         

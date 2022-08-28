@@ -6,6 +6,7 @@ use crate::video::Video;
 use crate::bootstrap::Bootstrap;
 use crate::joypad::Joypad;
 use crate::timer::Timer;
+use crate::audio::Audio;
 
 pub struct Mem {
     bootstrap: Bootstrap,
@@ -19,6 +20,7 @@ pub struct Mem {
     pub video: Video,
     pub joypad: Joypad,
     pub timer: Timer,
+    pub audio: Audio,
 
     oam_dma_source: Option<u16>,
 }
@@ -36,6 +38,7 @@ impl Mem {
             video: Video::new(),
             joypad: Joypad::new(),
             timer: Timer::new(),
+            audio: Audio::new(),
 
             oam_dma_source: None,
         }
@@ -53,6 +56,7 @@ impl Mem {
             _ if address < 0xFF80 => match address {
                 0xFF00 => self.joypad.read(address),
                 0xFF0F => self.reg_if,
+                _ if address >= 0xff10 && address < 0xFF27 => self.audio.read(address),
                 0xff50 => self.page0_mode,
                 0xff46 => 0,
                 0xff4d => 0xff,
@@ -78,6 +82,7 @@ impl Mem {
                 0xFF00 => self.joypad.write(address, data),
                 0xFF01 => { print!("\x1b[1;34m{}\x1b[0m", (data as char).to_string()); /*self.reg_if |= 0x08;*/ },
                 0xFF0F => self.reg_if = data,
+                _ if address >= 0xff10 && address < 0xFF27 => self.audio.write(address, data),
                 0xff46 => {self.oam_dma_source = Some((data as u16)<<8)},
                 0xff50 if self.page0_mode == 0 => self.page0_mode = data,
                 _ if address & 0x00fc == 0x04 => self.timer.write(address, data),

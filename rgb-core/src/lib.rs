@@ -8,6 +8,7 @@ pub mod video;
 pub mod bootstrap;
 pub mod joypad;
 pub mod timer;
+pub mod audio;
 
 mod dmg;
 

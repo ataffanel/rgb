@@ -2,6 +2,7 @@
 name = "rgb-core"
 version = "0.1.0"
 authors = ["Arnaud Taffanel <arnaud@bitcraze.io>"]
+edition = "2021"
 
 [dependencies]
 

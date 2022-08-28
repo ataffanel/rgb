@@ -41,6 +41,7 @@ impl Dmg {
         self.cpu.mem.reg_if |= self.cpu.mem.timer.step(self.cpu.cycle);
         self.cpu.mem.reg_if |= self.cpu.mem.video.step(self.cpu.cycle);
         self.cpu.mem.joypad.step();
+        self.cpu.mem.audio.step(self.cpu.cycle);
 
         self.cpu.mem.video.image_ready
     }

@@ -2,8 +2,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-#[macro_use]
-extern crate clap;
 use clap::App;
 
 extern crate sdl2;
@@ -15,6 +13,8 @@ use sdl2::keyboard::Keycode;
 //use sdl2::joystick::JoystickSubsystem;
 use sdl2::controller::Button;
 
+use sdl2::audio::AudioSpecDesired;
+
 extern crate rgb_core;
 use rgb_core::bootstrap;
 use rgb_core::cart;
@@ -25,8 +25,6 @@ mod display;
 
 fn main() {
     let matches = App::new("rgb")
-                          .version(crate_version!())
-                          .author(crate_authors!())
                           .about("Gameboy emulator")
                           .args_from_usage(
                               "-b, --bootstrap=[bootstrap] 'Custom bootstrap rom'
@@ -90,8 +88,23 @@ fn main() {
 }
 
 fn emulator_loop(dmg: &mut Dmg, mut disp: display::Display, sdl: Sdl) {
+    let audio_subsystem = sdl.audio().unwrap();
+    let desired_spec = AudioSpecDesired {
+        freq: Some(44100),
+        channels: Some(1),  // mono
+        samples: None       // default sample size
+    };
+
+    let device = audio_subsystem.open_queue(None, &desired_spec).unwrap();
+
+    device.resume();
+
     'outer: loop {
         dmg.run_until_next_frame();
+
+        // println!("Audio samples: {}", dmg.cpu.mem.audio.audio_buffer.len());
+        device.queue(&dmg.cpu.mem.audio.audio_buffer);
+        dmg.cpu.mem.audio.audio_buffer.clear();
 
         // Display the picture!
         disp.render_screen(dmg.borrow_display());
